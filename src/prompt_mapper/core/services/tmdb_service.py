@@ -2,8 +2,6 @@
 
 from typing import Any, List, Optional
 
-import aiohttp
-
 from ...config.models import Config
 from ...infrastructure.logging import LoggerMixin
 from ...utils import TMDbServiceError, calculate_similarity
@@ -22,7 +20,7 @@ class TMDbService(ITMDbService, LoggerMixin):
         """
         self._config = config
         self._tmdb_config = config.tmdb
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._session = None
 
     async def search_movies(
         self, llm_response: LLMResponse, max_results: int = 10
@@ -320,13 +318,15 @@ class TMDbService(ITMDbService, LoggerMixin):
             "weighted_language": language_score * scoring_config.language_match,
         }
 
-    def _get_session(self) -> aiohttp.ClientSession:
+    def _get_session(self):
         """Get or create HTTP session.
 
         Returns:
             HTTP session.
         """
         if self._session is None:
+            import aiohttp
+
             timeout = aiohttp.ClientTimeout(total=self._tmdb_config.timeout)
             # Disable SSL verification and warnings
             try:

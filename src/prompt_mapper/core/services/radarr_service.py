@@ -3,8 +3,6 @@
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import aiohttp
-
 from ...config.models import Config
 from ...infrastructure.logging import LoggerMixin
 from ...utils import RadarrServiceError, create_hardlink, safe_copy_file, safe_move_file
@@ -24,7 +22,7 @@ class RadarrService(IRadarrService, LoggerMixin):
         """
         self._config = config
         self._radarr_config = config.radarr
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._session = None
         # Using manual HTTP requests for better control
 
     async def get_movie_by_tmdb_id(self, tmdb_id: int) -> Optional[RadarrMovie]:
@@ -377,13 +375,15 @@ class RadarrService(IRadarrService, LoggerMixin):
         except Exception as e:
             self.logger.warning(f"Failed to trigger movie rescan: {e}")
 
-    def _get_session(self) -> aiohttp.ClientSession:
+    def _get_session(self):
         """Get or create HTTP session.
 
         Returns:
             HTTP session.
         """
         if self._session is None:
+            import aiohttp
+
             timeout = aiohttp.ClientTimeout(total=self._radarr_config.timeout)
             # Disable SSL verification and warnings
             try:
