@@ -29,6 +29,8 @@ setup(
         "aiohttp>=3.12.15",
         "aiofiles>=22.0.0",
         "tenacity>=8.0.0",
+        "openai>=1.0.0",
+        "anthropic>=0.7.0",
     ],
     extras_require={
         "dev": [
@@ -41,8 +43,6 @@ setup(
             "mypy>=0.991",
             "pre-commit>=2.20.0",
         ],
-        "openai": ["openai>=1.0.0"],
-        "anthropic": ["anthropic>=0.7.0"],
     },
     entry_points={
         "console_scripts": [

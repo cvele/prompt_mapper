@@ -32,6 +32,8 @@ dependencies = [
     "aiohttp>=3.12.15",
     "aiofiles>=22.0.0",
     "tenacity>=8.0.0",
+    "openai>=1.0.0",
+    "anthropic>=0.7.0",
 ]
 
 [project.optional-dependencies]
@@ -48,8 +50,6 @@ dev = [
     "build>=0.10.0",
     "pyinstaller>=5.0.0",
 ]
-openai = ["openai>=1.0.0"]
-anthropic = ["anthropic>=0.7.0"]
 
 [project.scripts]
 prompt-mapper = "prompt_mapper.cli:main"
