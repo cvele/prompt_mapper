@@ -1,0 +1,92 @@
+# Dependabot configuration for Prompt-Based Movie Mapper
+# Automatically creates PRs for dependency updates
+# See: https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+
+version: 2
+updates:
+  # Python dependencies (pip)
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "your-username"  # Replace with actual GitHub username
+    assignees:
+      - "your-username"  # Replace with actual GitHub username
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "python"
+    # Group related updates together
+    groups:
+      core-dependencies:
+        patterns:
+          - "pyyaml"
+          - "requests"
+          - "click"
+          - "pydantic"
+          - "aiohttp"
+          - "aiofiles"
+          - "tenacity"
+      llm-providers:
+        patterns:
+          - "openai"
+          - "anthropic"
+      dev-dependencies:
+        patterns:
+          - "pytest*"
+          - "black"
+          - "isort"
+          - "flake8"
+          - "mypy"
+          - "pre-commit"
+    # Ignore certain updates
+    ignore:
+      - dependency-name: "pydantic"
+        versions: ["3.x"]  # Stay on v2 for now due to validator changes
+      - dependency-name: "click"
+        versions: [">9.0"]  # Avoid major version bumps
+
+  # GitHub Actions dependencies
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "10:00"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "your-username"
+    assignees:
+      - "your-username"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    groups:
+      github-actions:
+        patterns:
+          - "actions/*"
+          - "codecov/*"
+          - "docker/*"
+
+  # Docker dependencies (if using Dockerfile in future)
+  - package-ecosystem: "docker"
+    directory: "/docker"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "your-username"
+    commit-message:
+      prefix: "docker"
+    labels:
+      - "dependencies"
+      - "docker"
