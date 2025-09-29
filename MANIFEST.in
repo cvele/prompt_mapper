@@ -12,6 +12,8 @@ include .pre-commit-config.yaml
 include DEVELOPMENT.md
 include functional_requirements.md
 include docker-compose.yml
+include main_entry.py
+include prompt_mapper.spec
 
 # Include configuration examples (but not real configs)
 include config/config.example.yaml

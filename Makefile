@@ -142,6 +142,16 @@ build: clean-dist ## Build distribution packages
 dist: build ## Build and check distribution
 	$(ACTIVATE) twine check dist/*
 
+# Binary Distribution
+build-binary: clean-dist ## Build standalone executable with PyInstaller
+	$(ACTIVATE) pyinstaller prompt_mapper.spec --clean --noconfirm
+	@echo "✅ Binary built successfully!"
+	@ls -la dist/
+
+build-binaries-all: ## Build binaries for all platforms (requires cross-compilation setup)
+	@echo "Building binaries for all platforms..."
+	$(MAKE) build-binary
+
 clean-dist: ## Clean distribution files
 	rm -rf build/ dist/ *.egg-info/
 
