@@ -112,7 +112,7 @@ jobs:
         env:
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          RADARR_API_KEY: test-api-key
+          RADARR_API_KEY: ${{ secrets.RADARR_API_KEY }}
           MOVIES_DIR: ${{ env.MOVIES_DIR }}
           LC_ALL: ${{ env.LC_ALL }}
           LANG: ${{ env.LANG }}

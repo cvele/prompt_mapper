@@ -138,14 +138,14 @@ jobs:
         env:
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          RADARR_API_KEY: test-integration-key
+          RADARR_API_KEY: ${{ secrets.RADARR_API_KEY }}
 
       - name: Test CLI functionality
         run: |
           source .venv/bin/activate
           export TMDB_API_KEY="${{ secrets.TMDB_API_KEY }}"
           export OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}"
-          export RADARR_API_KEY="test-integration-key"
+          export RADARR_API_KEY="${{ secrets.RADARR_API_KEY }}"
 
           # Test CLI commands
           prompt-mapper --help

@@ -29,6 +29,11 @@ def cli(ctx: click.Context, config: Optional[Path], verbose: bool, dry_run: bool
     ctx.ensure_object(dict)
     ctx.obj["verbose"] = verbose
     ctx.obj["dry_run"] = dry_run
+    ctx.obj["config_path"] = config
+
+    # Skip configuration loading for commands that don't need it
+    if ctx.invoked_subcommand == "init":
+        return
 
     try:
         # Load configuration

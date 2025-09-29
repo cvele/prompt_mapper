@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+import subprocess
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -94,6 +95,14 @@ async def radarr_service(radarr_url):
     pytest.skip(f"Radarr not available at {radarr_url} after {max_attempts} attempts")
 
 
+def _get_radarr_api_key():
+    """Get Radarr API key from environment or config file."""
+    # First try environment variable
+    api_key = os.getenv("RADARR_API_KEY")
+    if api_key:
+        return api_key
+
+
 @pytest.fixture
 def integration_config(tmp_path, radarr_url):
     """Create integration test configuration."""
@@ -115,7 +124,7 @@ def integration_config(tmp_path, radarr_url):
         "radarr": {
             "enabled": True,
             "url": radarr_url,
-            "api_key": os.getenv("RADARR_API_KEY", "test-api-key"),
+            "api_key": _get_radarr_api_key(),
             "timeout": 30,
             "default_profile": {
                 "quality_profile_id": 1,
