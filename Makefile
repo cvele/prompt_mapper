@@ -8,18 +8,40 @@ SRC_DIR := src
 TESTS_DIR := tests
 
 # Platform detection
-ifeq ($(OS),Windows_NT)
+# Detect the platform and shell environment
+UNAME_S := $(shell uname -s 2>/dev/null || echo "Windows")
+ifeq ($(UNAME_S),Darwin)
+    PLATFORM := macos
+    PYTHON := python3
+    ACTIVATE := source $(VENV_DIR)/bin/activate &&
+    PIP := pip
+else ifeq ($(UNAME_S),Linux)
+    PLATFORM := linux
+    PYTHON := python3
+    ACTIVATE := source $(VENV_DIR)/bin/activate &&
+    PIP := pip
+else ifneq (,$(findstring MINGW,$(UNAME_S)))
+    # Git Bash on Windows (MINGW64_NT, MINGW32_NT)
+    PLATFORM := windows-gitbash
+    PYTHON := python
+    ACTIVATE := source $(VENV_DIR)/Scripts/activate &&
+    PIP := python -m pip
+else ifneq (,$(findstring MSYS,$(UNAME_S)))
+    # MSYS2 on Windows
+    PLATFORM := windows-msys
+    PYTHON := python
+    ACTIVATE := source $(VENV_DIR)/Scripts/activate &&
+    PIP := python -m pip
+else ifeq ($(OS),Windows_NT)
+    # Native Windows
     PLATFORM := windows
     PYTHON := python
     ACTIVATE := $(VENV_DIR)\Scripts\activate.bat &&
     PIP := python -m pip
 else
-    UNAME_S := $(shell uname -s)
-    ifeq ($(UNAME_S),Darwin)
-        PLATFORM := macos
-    else
-        PLATFORM := linux
-    endif
+    # Default to Unix-like
+    PLATFORM := unix
+    PYTHON := python3
     ACTIVATE := source $(VENV_DIR)/bin/activate &&
     PIP := pip
 endif
@@ -176,6 +198,9 @@ info: ## Show platform and environment info
 	@echo "Python: $(PYTHON)"
 	@echo "Virtual env: $(VENV_DIR)"
 	@echo "Activation: $(ACTIVATE)"
+	@echo "PIP: $(PIP)"
+	@echo "UNAME_S: $(UNAME_S)"
+	@echo "OS: $(OS)"
 	@if [ -d "$(VENV_DIR)" ]; then \
 		echo "Virtual environment exists"; \
 		$(ACTIVATE) python --version; \
