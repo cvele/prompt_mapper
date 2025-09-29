@@ -137,7 +137,7 @@ run-dry: ## Run in dry-run mode with example
 
 # Build and Distribution
 build: clean-dist ## Build distribution packages
-	$(ACTIVATE) python setup.py sdist bdist_wheel
+	$(ACTIVATE) python -m build
 
 dist: build ## Build and check distribution
 	$(ACTIVATE) twine check dist/*

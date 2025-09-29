@@ -44,6 +44,8 @@ dev = [
     "flake8>=5.0.0",
     "mypy>=0.991",
     "pre-commit>=2.20.0",
+    "twine>=4.0.0",
+    "build>=0.10.0",
 ]
 openai = ["openai>=1.0.0"]
 anthropic = ["anthropic>=0.7.0"]

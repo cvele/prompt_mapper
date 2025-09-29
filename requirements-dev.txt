@@ -14,3 +14,7 @@ mypy>=0.991
 
 # Pre-commit hooks
 pre-commit>=2.20.0
+
+# Build and distribution
+twine>=4.0.0
+build>=0.10.0
