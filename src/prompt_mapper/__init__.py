@@ -7,11 +7,11 @@ library management.
 
 try:
     # Try to get version from setuptools_scm (when installed from git)
-    from ._version import version as __version__
+    from ._version import version as __version__  # type: ignore[import-not-found]
 except ImportError:
     # Fallback: try setuptools_scm directly
     try:
-        from setuptools_scm import get_version
+        from setuptools_scm import get_version  # type: ignore[import-not-found]
 
         __version__ = get_version(root="../..", relative_to=__file__)
     except ImportError:
