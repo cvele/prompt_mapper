@@ -14,6 +14,7 @@ include functional_requirements.md
 include docker-compose.yml
 include main_entry.py
 include prompt_mapper.spec
+include pyi_rth_certifi.py
 
 # Include configuration examples (but not real configs)
 include config/config.example.yaml

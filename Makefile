@@ -79,6 +79,12 @@ install-dev: venv-create ## Install package with development dependencies
 	@if [ -f requirements-dev.txt ]; then $(ACTIVATE) $(PIP) install -r requirements-dev.txt; fi
 	$(ACTIVATE) pre-commit install
 
+install-binary: venv-create ## Install package with minimal dependencies for binary builds
+	@echo "Installing package with binary build dependencies..."
+	$(ACTIVATE) $(PIP) install --upgrade pip setuptools wheel
+	$(ACTIVATE) $(PIP) install -e .
+	$(ACTIVATE) $(PIP) install pyinstaller>=5.0.0
+
 # Setup
 setup: install-dev ## Complete development setup
 	@echo "Setting up development environment..."
@@ -143,7 +149,7 @@ dist: build ## Build and check distribution
 	$(ACTIVATE) twine check dist/*
 
 # Binary Distribution
-build-binary: clean-dist ## Build standalone executable with PyInstaller
+build-binary: clean-dist install-binary ## Build standalone executable with PyInstaller
 	$(ACTIVATE) pyinstaller prompt_mapper.spec --clean --noconfirm
 	@echo "✅ Binary built successfully!"
 	@ls -la dist/

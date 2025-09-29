@@ -2,6 +2,7 @@
 
 import sys
 from pathlib import Path
+import certifi
 
 # Get the source directory
 src_dir = Path('src')
@@ -14,6 +15,8 @@ a = Analysis(
     datas=[
         # Include configuration example
         ('config/config.example.yaml', 'config/'),
+        # Include SSL certificates for HTTPS requests
+        (certifi.where(), 'certifi/'),
     ],
     hiddenimports=[
         # Core dependencies
@@ -36,10 +39,12 @@ a = Analysis(
         'asyncio',
         'ssl',
         'certifi',
+        # SSL certificate handling
+        'certifi.core',
     ],
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=['pyi_rth_certifi.py'],
     excludes=[
         # Exclude unnecessary modules to reduce size
         'tkinter',

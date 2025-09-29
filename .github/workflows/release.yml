@@ -137,9 +137,6 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
-        run: make install-dev
-
       - name: Build binary
         run: make build-binary
 
