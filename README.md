@@ -16,7 +16,7 @@ A powerful, prompt-driven tool for matching local movie files with canonical met
 
 ### Prerequisites
 
-- Python 3.8 or higher
+- Python 3.9 or higher
 - Make (for build automation)
 - TMDb API key
 - Radarr instance (optional)
