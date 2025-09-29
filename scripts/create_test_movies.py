@@ -3,7 +3,6 @@
 
 import locale
 import os
-import sys
 from pathlib import Path
 
 # Movie files from the screenshot - flat structure (filename, unused_size_range)

@@ -1,9 +1,9 @@
 """Configuration data models."""
 
 import os
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
 
 class LLMConfig(BaseModel):
@@ -116,7 +116,7 @@ class MatchingScoringConfig(BaseModel):
 
     @field_validator("title_similarity", "year_proximity", "popularity", "language_match")
     @classmethod
-    def validate_weights_sum(cls, v: float, info) -> float:
+    def validate_weights_sum(cls, v: float, info: ValidationInfo) -> float:
         """Validate that all weights sum to approximately 1.0."""
         # This is called for each field, so we check the sum when we have all values
         if info.data and len(info.data) == 3:  # All previous fields are set
