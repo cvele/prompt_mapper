@@ -418,36 +418,14 @@ class MovieOrchestrator(IMovieOrchestrator, LoggerMixin):
         Returns:
             List of paths to process individually.
         """
-        import shutil
-        import tempfile
-
+        # Don't copy files! Just return the parent directories of each video file
         individual_paths = []
-        temp_dir = Path(tempfile.mkdtemp(prefix="prompt_mapper_batch_"))
 
         try:
             for video_file in scan_result.video_files:
-                # Create individual directory for each movie
-                movie_name = (
-                    video_file.name.replace(".mkv", "").replace(".mp4", "").replace(".avi", "")
-                )
-                movie_dir = temp_dir / movie_name
-                movie_dir.mkdir(exist_ok=True)
-
-                # Copy video file
-                shutil.copy2(video_file.path, movie_dir / video_file.name)
-
-                # Copy matching subtitle if exists
-                subtitle_name = (
-                    video_file.name.replace(".mkv", ".srt")
-                    .replace(".mp4", ".srt")
-                    .replace(".avi", ".srt")
-                )
-                for subtitle_file in scan_result.subtitle_files:
-                    if subtitle_file.name == subtitle_name:
-                        shutil.copy2(subtitle_file.path, movie_dir / subtitle_file.name)
-                        break
-
-                individual_paths.append(movie_dir)
+                # Just use the parent directory of each video file
+                # No copying needed - process files in place
+                individual_paths.append(video_file.path.parent)
 
             return individual_paths
 
