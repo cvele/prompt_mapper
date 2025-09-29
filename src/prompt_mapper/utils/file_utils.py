@@ -38,7 +38,9 @@ def is_hidden_file(path: Path) -> bool:
         try:
             import stat
 
-            return bool(path.stat().st_file_attributes & stat.FILE_ATTRIBUTE_HIDDEN)
+            file_stat = path.stat()
+            if hasattr(file_stat, "st_file_attributes") and hasattr(stat, "FILE_ATTRIBUTE_HIDDEN"):
+                return bool(file_stat.st_file_attributes & stat.FILE_ATTRIBUTE_HIDDEN)  # type: ignore
         except (AttributeError, OSError):
             pass
 

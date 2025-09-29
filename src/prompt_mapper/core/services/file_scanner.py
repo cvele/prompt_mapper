@@ -98,6 +98,8 @@ class FileScanner(IFileScanner, LoggerMixin):
                 )
                 scan_results.append(scan_result)
             else:
+                # result is guaranteed to be ScanResult here
+                assert isinstance(result, ScanResult)
                 scan_results.append(result)
 
         return scan_results

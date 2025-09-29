@@ -120,7 +120,10 @@ class ConfigManager:
         content = os.path.expandvars(content)
 
         try:
-            return yaml.safe_load(content)
+            result = yaml.safe_load(content)
+            if not isinstance(result, dict):
+                raise yaml.YAMLError(f"YAML file {path} must contain a dictionary at root level")
+            return result
         except yaml.YAMLError as e:
             raise yaml.YAMLError(f"Failed to parse YAML file {path}: {e}")
 

@@ -1,6 +1,6 @@
 """TMDb service implementation."""
 
-from typing import List, Optional
+from typing import Any, List, Optional
 
 import aiohttp
 
@@ -14,7 +14,7 @@ from ..models import LLMResponse, MovieCandidate, MovieInfo
 class TMDbService(ITMDbService, LoggerMixin):
     """TMDb service implementation."""
 
-    def __init__(self, config: Config):
+    def __init__(self, config: Config) -> None:
         """Initialize TMDb service.
 
         Args:
@@ -228,7 +228,10 @@ class TMDbService(ITMDbService, LoggerMixin):
         async with self._get_session().get(url, params=params) as response:
             response.raise_for_status()
             data = await response.json()
-            return data.get("results", [])
+            results = data.get("results", [])
+            if not isinstance(results, list):
+                return []
+            return results
 
     def _parse_movie_result(self, data: dict) -> MovieInfo:
         """Parse TMDb movie result into MovieInfo.
@@ -256,6 +259,7 @@ class TMDbService(ITMDbService, LoggerMixin):
             title=data.get("title", ""),
             year=year,
             tmdb_id=data.get("id"),
+            imdb_id=data.get("imdb_id"),
             overview=data.get("overview"),
             poster_path=data.get("poster_path"),
             backdrop_path=data.get("backdrop_path"),
@@ -327,21 +331,21 @@ class TMDbService(ITMDbService, LoggerMixin):
             self._session = aiohttp.ClientSession(timeout=timeout)
         return self._session
 
-    async def close(self):
+    async def close(self) -> None:
         """Close HTTP session."""
         if self._session:
             await self._session.close()
             self._session = None
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "TMDbService":
         """Async context manager entry."""
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Async context manager exit."""
         await self.close()
 
-    def __del__(self):
+    def __del__(self) -> None:
         """Cleanup on deletion."""
         # Just log that cleanup is needed, don't try to clean up here
         if self._session and not self._session.closed:

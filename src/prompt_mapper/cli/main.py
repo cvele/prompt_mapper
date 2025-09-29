@@ -8,6 +8,7 @@ from typing import List, Optional
 import click
 
 from ..config import ConfigManager
+from ..core.models import ProcessingResult, SessionSummary
 from ..infrastructure import Container, setup_logging
 from ..utils import ConfigurationError, PromptMapperError
 
@@ -263,7 +264,7 @@ async def _check_services_status(container: Container) -> None:
         click.echo("Radarr Status: ✗ Error")
 
 
-def _display_result(result) -> None:
+def _display_result(result: ProcessingResult) -> None:
     """Display processing result."""
     click.echo(f"Status: {result.status.value}")
     if result.movie_match:
@@ -283,7 +284,7 @@ def _display_result(result) -> None:
         click.echo(f"Error: {result.error_message}", err=True)
 
 
-def _display_summary(summary) -> None:
+def _display_summary(summary: SessionSummary) -> None:
     """Display session summary."""
     click.echo("\nSession Summary")
     click.echo("=" * 20)

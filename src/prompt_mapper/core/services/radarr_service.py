@@ -16,7 +16,7 @@ from ..models import ImportResult, MovieInfo
 class RadarrService(IRadarrService, LoggerMixin):
     """Radarr service implementation."""
 
-    def __init__(self, config: Config):
+    def __init__(self, config: Config) -> None:
         """Initialize Radarr service.
 
         Args:
@@ -96,7 +96,7 @@ class RadarrService(IRadarrService, LoggerMixin):
             movie_tags = tags or profile.tags
 
             # Prepare movie data for Radarr API v3
-            movie_data = {
+            movie_data: Dict[str, Any] = {
                 "title": movie_info.title,
                 "originalTitle": movie_info.original_title or movie_info.title,
                 "year": movie_info.year,
@@ -191,7 +191,9 @@ class RadarrService(IRadarrService, LoggerMixin):
                         ImportResult(
                             file_path=source_path,
                             imported=False,
+                            target_path=None,
                             error="Source file does not exist",
+                            method=None,
                         )
                     )
                     continue
@@ -222,6 +224,7 @@ class RadarrService(IRadarrService, LoggerMixin):
                             file_path=source_path,
                             imported=True,
                             target_path=target_path,
+                            error=None,
                             method=method,
                         )
                     )
@@ -229,7 +232,11 @@ class RadarrService(IRadarrService, LoggerMixin):
                 else:
                     results.append(
                         ImportResult(
-                            file_path=source_path, imported=False, error=f"Failed to {method} file"
+                            file_path=source_path,
+                            imported=False,
+                            target_path=None,
+                            error=f"Failed to {method} file",
+                            method=None,
                         )
                     )
 
@@ -324,7 +331,10 @@ class RadarrService(IRadarrService, LoggerMixin):
 
             async with self._get_session().get(url, headers=headers) as response:
                 response.raise_for_status()
-                return await response.json()
+                result = await response.json()
+                if not isinstance(result, dict):
+                    return {"error": "Invalid response format"}
+                return result
 
         except Exception as e:
             error_msg = f"Failed to get Radarr system status: {e}"
@@ -378,17 +388,17 @@ class RadarrService(IRadarrService, LoggerMixin):
             self._session = aiohttp.ClientSession(timeout=timeout)
         return self._session
 
-    async def close(self):
+    async def close(self) -> None:
         """Close HTTP session."""
         if self._session:
             await self._session.close()
             self._session = None
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "RadarrService":
         """Async context manager entry."""
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Async context manager exit."""
         await self.close()
 
@@ -421,7 +431,7 @@ class RadarrService(IRadarrService, LoggerMixin):
 
         return slug
 
-    def __del__(self):
+    def __del__(self) -> None:
         """Cleanup on deletion."""
         # Just log that cleanup is needed, don't try to clean up here
         if self._session and not self._session.closed:

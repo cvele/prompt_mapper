@@ -112,7 +112,7 @@ class BaseLLMService(ILLMService, LoggerMixin, ABC):
         # Get main video file (largest)
         main_file = max(file_info, key=lambda f: f.size_bytes) if file_info else None
 
-        input_data = {"context": context, "files": []}
+        input_data: Dict[str, Any] = {"context": context, "files": []}
 
         for file in file_info:
             # Clean filename for analysis
@@ -283,7 +283,10 @@ class OpenAILLMService(BaseLLMService):
                 timeout=self._llm_config.timeout,
             )
 
-            return response.choices[0].message.content
+            content = response.choices[0].message.content
+            if content is None:
+                raise LLMServiceError("OpenAI API returned empty content")
+            return content
 
         except Exception as e:
             raise LLMServiceError(f"OpenAI API request failed: {e}")
@@ -321,7 +324,11 @@ class AnthropicLLMService(BaseLLMService):
                 timeout=self._llm_config.timeout,
             )
 
-            return response.content[0].text
+            content_block = response.content[0]
+            if hasattr(content_block, "text"):
+                return content_block.text
+            else:
+                raise LLMServiceError("Anthropic API returned unexpected content type")
 
         except Exception as e:
             raise LLMServiceError(f"Anthropic API request failed: {e}")

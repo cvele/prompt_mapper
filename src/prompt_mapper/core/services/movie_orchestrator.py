@@ -15,7 +15,10 @@ from ..interfaces import (
     IRadarrService,
     ITMDbService,
 )
+from ..interfaces.radarr_service import RadarrMovie
 from ..models import ProcessingResult, SessionSummary
+from ..models.file_info import ScanResult
+from ..models.movie import MovieMatch
 from ..models.processing_result import ProcessingStatus, RadarrAction
 
 
@@ -70,7 +73,17 @@ class MovieOrchestrator(IMovieOrchestrator, LoggerMixin):
             OrchestratorError: If processing fails.
         """
         start_time = time.time()
-        result = ProcessingResult(source_path=path, status=ProcessingStatus.FAILED)
+        result = ProcessingResult(
+            source_path=path,
+            status=ProcessingStatus.FAILED,
+            scan_result=None,
+            movie_match=None,
+            radarr_action=None,
+            error_message=None,
+            processing_time_seconds=None,
+            tmdb_url=None,
+            radarr_url=None,
+        )
 
         try:
             self.logger.info(f"Processing movie: {path}")
@@ -224,10 +237,18 @@ class MovieOrchestrator(IMovieOrchestrator, LoggerMixin):
                     error_result = ProcessingResult(
                         source_path=paths[i],
                         status=ProcessingStatus.FAILED,
+                        scan_result=None,
+                        movie_match=None,
+                        radarr_action=None,
                         error_message=str(result),
+                        processing_time_seconds=None,
+                        tmdb_url=None,
+                        radarr_url=None,
                     )
                     summary.add_result(error_result)
                 else:
+                    # result is guaranteed to be ProcessingResult here
+                    assert isinstance(result, ProcessingResult)
                     summary.add_result(result)
 
             summary.total_processing_time_seconds = time.time() - session_start_time
@@ -282,8 +303,8 @@ class MovieOrchestrator(IMovieOrchestrator, LoggerMixin):
         self._interactive = interactive
 
     async def _handle_radarr_integration(
-        self, movie_match, auto_add: bool
-    ) -> tuple[RadarrAction, Optional[dict]]:
+        self, movie_match: MovieMatch, auto_add: bool
+    ) -> tuple[RadarrAction, Optional[RadarrMovie]]:
         """Handle Radarr integration for a movie match.
 
         Args:
@@ -295,9 +316,11 @@ class MovieOrchestrator(IMovieOrchestrator, LoggerMixin):
         """
         try:
             # Check if movie already exists in Radarr
-            existing_movie = await self._radarr_service.get_movie_by_tmdb_id(
-                movie_match.movie_info.tmdb_id
-            )
+            tmdb_id = movie_match.movie_info.tmdb_id
+            if tmdb_id is None:
+                raise ValueError("Movie TMDb ID is required for Radarr integration")
+
+            existing_movie = await self._radarr_service.get_movie_by_tmdb_id(tmdb_id)
 
             if existing_movie:
                 self.logger.info(f"Movie already exists in Radarr: {movie_match.movie_info.title}")
@@ -310,10 +333,6 @@ class MovieOrchestrator(IMovieOrchestrator, LoggerMixin):
             else:
                 # Ask user for confirmation
                 import click
-
-                if not self._interactive:
-                    # Non-interactive mode - skip adding
-                    return RadarrAction.SKIPPED, None
 
                 try:
                     if click.confirm(f"Add '{movie_match.movie_info.title}' to Radarr?"):
@@ -328,7 +347,7 @@ class MovieOrchestrator(IMovieOrchestrator, LoggerMixin):
             self.logger.error(f"Radarr integration failed: {e}")
             return RadarrAction.FAILED, None
 
-    def _is_single_movie_directory(self, scan_result) -> bool:
+    def _is_single_movie_directory(self, scan_result: ScanResult) -> bool:
         """Check if directory contains files for a single movie.
 
         Args:
@@ -390,7 +409,7 @@ class MovieOrchestrator(IMovieOrchestrator, LoggerMixin):
 
         return SequenceMatcher(None, name1, name2).ratio()
 
-    def _create_individual_movie_paths(self, scan_result) -> List[Path]:
+    def _create_individual_movie_paths(self, scan_result: ScanResult) -> List[Path]:
         """Create individual movie paths for batch processing.
 
         Args:

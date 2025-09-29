@@ -3,7 +3,7 @@
 import logging
 import logging.handlers
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from ..config.models import LoggingConfig
 
@@ -74,15 +74,15 @@ class LoggerMixin:
         return logging.getLogger(f"{self.__class__.__module__}.{self.__class__.__name__}")
 
 
-def log_function_call(logger: Optional[logging.Logger] = None):
+def log_function_call(logger: Optional[logging.Logger] = None) -> Callable:
     """Decorator to log function calls.
 
     Args:
         logger: Logger to use. If None, uses function's module logger.
     """
 
-    def decorator(func):
-        def wrapper(*args, **kwargs):
+    def decorator(func: Callable) -> Callable:
+        def wrapper(*args, **kwargs):  # type: ignore
             func_logger = logger or logging.getLogger(func.__module__)
             func_logger.debug(f"Calling {func.__name__} with args={args}, kwargs={kwargs}")
             try:

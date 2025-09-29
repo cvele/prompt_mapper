@@ -20,7 +20,7 @@ T = TypeVar("T")
 class Container:
     """Dependency injection container using registry pattern."""
 
-    def __init__(self, config_manager: Optional[ConfigManager] = None):
+    def __init__(self, config_manager: Optional[ConfigManager] = None) -> None:
         """Initialize container.
 
         Args:
@@ -32,7 +32,7 @@ class Container:
         self._config_manager = config_manager or ConfigManager()
         self._logger = logging.getLogger(__name__)
 
-    def register_singleton(self, interface: Type[T], implementation: Type[T]) -> None:
+    def register_singleton(self, interface: Type[T], implementation: Type[Any]) -> None:
         """Register a singleton service.
 
         Args:
@@ -78,11 +78,11 @@ class Container:
         """
         # Check for pre-registered instances
         if interface in self._singletons:
-            return self._singletons[interface]
+            return self._singletons[interface]  # type: ignore
 
         # Check for factory functions
         if interface in self._factories:
-            return self._factories[interface]()
+            return self._factories[interface]()  # type: ignore
 
         # Check for singleton services
         if interface in self._services:
@@ -90,7 +90,7 @@ class Container:
                 implementation = self._services[interface]
                 instance = self._create_instance(implementation)
                 self._singletons[interface] = instance
-            return self._singletons[interface]
+            return self._singletons[interface]  # type: ignore
 
         raise ValueError(f"Service not registered: {interface.__name__}")
 
@@ -160,18 +160,18 @@ class Container:
 
         # LLM Service based on provider
         if config.llm.provider == "openai":
-            self.register_singleton(ILLMService, OpenAILLMService)
+            self.register_singleton(ILLMService, OpenAILLMService)  # type: ignore
         elif config.llm.provider == "anthropic":
-            self.register_singleton(ILLMService, AnthropicLLMService)
+            self.register_singleton(ILLMService, AnthropicLLMService)  # type: ignore
         else:
             raise ValueError(f"Unsupported LLM provider: {config.llm.provider}")
 
         # Other services
-        self.register_singleton(ITMDbService, TMDbService)
-        self.register_singleton(IRadarrService, RadarrService)
-        self.register_singleton(IFileScanner, FileScanner)
-        self.register_singleton(IMovieResolver, MovieResolver)
-        self.register_singleton(IMovieOrchestrator, MovieOrchestrator)
+        self.register_singleton(ITMDbService, TMDbService)  # type: ignore
+        self.register_singleton(IRadarrService, RadarrService)  # type: ignore
+        self.register_singleton(IFileScanner, FileScanner)  # type: ignore
+        self.register_singleton(IMovieResolver, MovieResolver)  # type: ignore
+        self.register_singleton(IMovieOrchestrator, MovieOrchestrator)  # type: ignore
 
         self._logger.info("Default services configured")
 
@@ -200,7 +200,7 @@ class Container:
         """Context manager entry."""
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Context manager exit."""
         # Cleanup resources if needed
         pass
