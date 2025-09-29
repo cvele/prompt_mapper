@@ -133,29 +133,6 @@ jobs:
           echo "⏳ Waiting for Radarr to be ready..."
           timeout 120 bash -c 'until curl -f http://localhost:7878/ping; do sleep 3; done'
 
-      - name: Set up Radarr configuration
-        run: ./scripts/setup_radarr.sh
-        env:
-          RADARR_API_KEY: test-integration-key
-
-      - name: Create test data
-        run: |
-          # Try to create test movies, use fallback if it fails
-          if make test-movies; then
-            echo "✅ Test movies created successfully"
-          else
-            echo "⚠️ Test movies creation failed, using fallback approach"
-            # Create a minimal test structure in /tmp
-            mkdir -p /tmp/test_movies
-            echo "V" > "/tmp/test_movies/Cars (2006).mkv"
-            echo "S" > "/tmp/test_movies/Cars (2006).srt"
-            echo "V" > "/tmp/test_movies/Frozen (2013).mkv"
-            echo "V" > "/tmp/test_movies/Beli očnjak (2018).mkv"
-            # Link to expected location
-            ln -sf /tmp/test_movies test_movies || cp -r /tmp/test_movies .
-            echo "📁 Created minimal test structure"
-          fi
-
       - name: Run integration tests
         run: make test-integration
         env:

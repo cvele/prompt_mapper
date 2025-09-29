@@ -158,6 +158,7 @@ integration-setup: docker-up test-movies ## Set up complete integration test env
 		echo "⏳ Attempt $$i/30: Waiting for Radarr..."; \
 		sleep 2; \
 	done
+	@./scripts/setup_radarr.sh
 	@echo "Integration test environment ready!"
 
 integration-teardown: docker-down ## Tear down integration test environment
