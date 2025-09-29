@@ -84,7 +84,7 @@ jobs:
       - name: Install dependencies
         run: make install-dev
 
-      - name: Set up Docker Buildx
+      - name: Set up Docker
         uses: docker/setup-buildx-action@v3
 
       - name: Start test environment

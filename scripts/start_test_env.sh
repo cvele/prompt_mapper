@@ -16,7 +16,14 @@ mkdir -p docker/radarr/{config,movies,downloads}
 
 # Start services
 echo "📦 Starting Radarr container..."
-docker-compose up -d radarr
+if command -v docker-compose >/dev/null 2>&1; then
+    docker-compose up -d radarr
+elif command -v docker >/dev/null 2>&1; then
+    docker compose up -d radarr
+else
+    echo "❌ Neither 'docker compose' nor 'docker-compose' found"
+    exit 1
+fi
 
 # Wait for Radarr to be ready
 echo "⏳ Waiting for Radarr to start..."

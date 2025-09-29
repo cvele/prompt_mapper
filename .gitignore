@@ -184,3 +184,12 @@ docker/radarr/config/Backups/
 docker/radarr/config/Sentry/
 docker/radarr/config/logs/
 docker/radarr/config/radarr.pid
+docker/radarr/config/radarr.db
+docker/radarr/config/radarr.db-shm
+docker/radarr/config/radarr.db-wal
+docker/radarr/config/radarr.db-journal
+docker/radarr/config/radarr.db-trace
+docker/radarr/config/radarr.db-trace.lock
+docker/radarr/config/radarr.db-trace.lock.lock
+docker/radarr/config/radarr.db-trace.lock.lock.lock
+docker/radarr/config/logs.db*
