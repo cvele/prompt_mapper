@@ -8,16 +8,20 @@ SRC_DIR := src
 TESTS_DIR := tests
 
 # Platform detection
-UNAME_S := $(shell uname -s 2>/dev/null || echo "Windows")
-ifeq ($(UNAME_S),Darwin)
-    PLATFORM := macos
-    ACTIVATE := source $(VENV_DIR)/bin/activate
-else ifeq ($(UNAME_S),Linux)
-    PLATFORM := linux
-    ACTIVATE := source $(VENV_DIR)/bin/activate
-else
+ifeq ($(OS),Windows_NT)
     PLATFORM := windows
-    ACTIVATE := $(VENV_DIR)/Scripts/activate
+    PYTHON := python
+    ACTIVATE := $(VENV_DIR)\Scripts\activate.bat &&
+    PIP := python -m pip
+else
+    UNAME_S := $(shell uname -s)
+    ifeq ($(UNAME_S),Darwin)
+        PLATFORM := macos
+    else
+        PLATFORM := linux
+    endif
+    ACTIVATE := source $(VENV_DIR)/bin/activate &&
+    PIP := pip
 endif
 
 .PHONY: help install install-dev setup clean test lint format type-check run build dist clean-dist venv-create venv-clean
@@ -43,15 +47,15 @@ venv-activate: ## Activate virtual environment
 # Installation
 install: venv-create ## Install package and dependencies
 	@echo "Installing package and dependencies..."
-	$(ACTIVATE) && pip install --upgrade pip setuptools wheel
-	$(ACTIVATE) && pip install -e .
+	$(ACTIVATE) $(PIP) install --upgrade pip setuptools wheel
+	$(ACTIVATE) $(PIP) install -e .
 
 install-dev: venv-create ## Install package with development dependencies
 	@echo "Installing package with development dependencies..."
-	$(ACTIVATE) && pip install --upgrade pip setuptools wheel
-	$(ACTIVATE) && pip install -e ".[dev]"
-	$(ACTIVATE) && pip install -r requirements-dev.txt
-	$(ACTIVATE) && pre-commit install
+	$(ACTIVATE) $(PIP) install --upgrade pip setuptools wheel
+	$(ACTIVATE) $(PIP) install -e ".[dev]"
+	@if [ -f requirements-dev.txt ]; then $(ACTIVATE) $(PIP) install -r requirements-dev.txt; fi
+	$(ACTIVATE) pre-commit install
 
 # Setup
 setup: install-dev ## Complete development setup
@@ -65,56 +69,56 @@ setup: install-dev ## Complete development setup
 
 # Code Quality
 lint: type-check ## Run linting (matches pre-commit hooks)
-	$(ACTIVATE) && flake8 $(SRC_DIR) $(TESTS_DIR) scripts/
-	$(ACTIVATE) && isort --check-only $(SRC_DIR) $(TESTS_DIR) scripts/
-	$(ACTIVATE) && black --check $(SRC_DIR) $(TESTS_DIR) scripts/
+	$(ACTIVATE) flake8 $(SRC_DIR) $(TESTS_DIR) scripts/
+	$(ACTIVATE) isort --check-only $(SRC_DIR) $(TESTS_DIR) scripts/
+	$(ACTIVATE) black --check $(SRC_DIR) $(TESTS_DIR) scripts/
 
 format: ## Format code
-	$(ACTIVATE) && isort $(SRC_DIR) $(TESTS_DIR) scripts/
-	$(ACTIVATE) && black $(SRC_DIR) $(TESTS_DIR) scripts/
+	$(ACTIVATE) isort $(SRC_DIR) $(TESTS_DIR) scripts/
+	$(ACTIVATE) black $(SRC_DIR) $(TESTS_DIR) scripts/
 
 type-check: ## Run type checking
-	$(ACTIVATE) && mypy $(SRC_DIR)
+	$(ACTIVATE) mypy $(SRC_DIR)
 
 pre-commit-check: ## Run all pre-commit checks locally
-	$(ACTIVATE) && pre-commit run --all-files
+	$(ACTIVATE) pre-commit run --all-files
 
 pre-commit-install: ## Install pre-commit hooks
-	$(ACTIVATE) && pre-commit install
+	$(ACTIVATE) pre-commit install
 
 # Testing
 test: ## Run unit tests only
-	$(ACTIVATE) && pytest $(TESTS_DIR)/unit -v
+	$(ACTIVATE) python -m pytest $(TESTS_DIR)/unit -v
 
 test-unit: ## Run unit tests only
-	$(ACTIVATE) && pytest $(TESTS_DIR)/unit -v
+	$(ACTIVATE) python -m pytest $(TESTS_DIR)/unit -v
 
 test-integration: integration-setup ## Run integration tests (requires test environment)
-	$(ACTIVATE) && pytest $(TESTS_DIR)/integration -v -m integration
+	$(ACTIVATE) python -m pytest $(TESTS_DIR)/integration -v -m integration
 	$(MAKE) integration-teardown
 
 test-all: ## Run all tests
-	$(ACTIVATE) && pytest $(TESTS_DIR) -v
+	$(ACTIVATE) python -m pytest $(TESTS_DIR) -v
 
 test-cov: ## Run tests with coverage
-	$(ACTIVATE) && pytest $(TESTS_DIR) --cov=$(SRC_DIR) --cov-report=html --cov-report=term-missing -v
+	$(ACTIVATE) python -m pytest $(TESTS_DIR) --cov=$(SRC_DIR) --cov-report=html --cov-report=term-missing -v
 
 test-integration-cov: ## Run integration tests with coverage
-	$(ACTIVATE) && pytest $(TESTS_DIR)/integration --cov=$(SRC_DIR) --cov-report=html --cov-report=term-missing -v -m integration
+	$(ACTIVATE) python -m pytest $(TESTS_DIR)/integration --cov=$(SRC_DIR) --cov-report=html --cov-report=term-missing -v -m integration
 
 # Application
 run: ## Run the application
-	$(ACTIVATE) && prompt-mapper --help
+	$(ACTIVATE) prompt-mapper --help
 
 run-dry: ## Run in dry-run mode with example
-	$(ACTIVATE) && prompt-mapper scan ./examples --dry-run
+	$(ACTIVATE) prompt-mapper scan ./examples --dry-run
 
 # Build and Distribution
 build: clean-dist ## Build distribution packages
-	$(ACTIVATE) && python setup.py sdist bdist_wheel
+	$(ACTIVATE) python setup.py sdist bdist_wheel
 
 dist: build ## Build and check distribution
-	$(ACTIVATE) && twine check dist/*
+	$(ACTIVATE) twine check dist/*
 
 clean-dist: ## Clean distribution files
 	rm -rf build/ dist/ *.egg-info/
@@ -128,7 +132,7 @@ clean: clean-dist ## Clean all generated files
 
 # Development helpers
 requirements: ## Generate requirements.txt
-	$(ACTIVATE) && pip freeze > requirements.txt
+	$(ACTIVATE) $(PIP) freeze > requirements.txt
 
 check: lint test-unit ## Run all checks (lint, unit tests)
 check-strict: lint type-check test-unit ## Run all checks including type checking
@@ -174,7 +178,7 @@ info: ## Show platform and environment info
 	@echo "Activation: $(ACTIVATE)"
 	@if [ -d "$(VENV_DIR)" ]; then \
 		echo "Virtual environment exists"; \
-		$(ACTIVATE) && python --version; \
+		$(ACTIVATE) python --version; \
 	else \
 		echo "Virtual environment not found"; \
 	fi
