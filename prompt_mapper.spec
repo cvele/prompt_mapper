@@ -41,6 +41,13 @@ a = Analysis(
         'certifi',
         # SSL certificate handling
         'certifi.core',
+        '_ssl',
+        'hashlib',
+        'hmac',
+        # Additional SSL-related modules
+        'socket',
+        'urllib3.util.ssl_',
+        'urllib3.contrib.pyopenssl',
     ],
     hookspath=[],
     hooksconfig={},
