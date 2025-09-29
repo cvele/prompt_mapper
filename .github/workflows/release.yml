@@ -39,8 +39,9 @@ jobs:
           source .venv/bin/activate
           python -m prompt_mapper.cli init --output /tmp/test_config.yaml
           python -c "
+          from pathlib import Path
           from prompt_mapper.config import ConfigManager
-          cm = ConfigManager('/tmp/test_config.yaml')
+          cm = ConfigManager(Path('/tmp/test_config.yaml'))
           try:
               cm.load_config()
               print('✅ Configuration validation passed')
