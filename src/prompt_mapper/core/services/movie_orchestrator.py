@@ -97,31 +97,77 @@ class MovieOrchestrator(IMovieOrchestrator, LoggerMixin):
                 result.status = ProcessingStatus.SKIPPED
                 return result
 
-            # Check if this is a flat directory with multiple movies
-            if len(scan_result.video_files) > 1 and not self._is_single_movie_directory(
-                scan_result
-            ):
-                # This is a flat directory with multiple movies - process as batch
-                self.logger.info(
-                    f"Detected flat directory with {len(scan_result.video_files)} movies, switching to batch mode"
-                )
-                individual_paths = self._create_individual_movie_paths(scan_result)
-                summary = await self.process_batch(
-                    paths=individual_paths,
-                    user_prompt=user_prompt,
-                    dry_run=dry_run,
-                    auto_add=auto_add,
-                    auto_import=auto_import,
-                    max_parallel=self._config.app.parallel_workers,
-                )
-                # Convert summary to single result for API compatibility
+            # If multiple video files, process each one individually
+            if len(scan_result.video_files) > 1:
+                movie_count = len(scan_result.video_files)
+                self.logger.info(f"Found {movie_count} video files, processing each individually")
+
+                # Limit to reasonable batch size
+                max_batch = 20
+                if movie_count > max_batch:
+                    self.logger.warning(
+                        f"Large batch ({movie_count} files). Processing first {max_batch} only."
+                    )
+                    scan_result.video_files = scan_result.video_files[:max_batch]
+
+                # Process each video file as a separate movie
+                summary = SessionSummary()
+                for i, video_file in enumerate(scan_result.video_files):
+                    self.logger.info(
+                        f"Processing {i+1}/{len(scan_result.video_files)}: {video_file.name}"
+                    )
+
+                    # Create single-file scan result
+                    single_scan = ScanResult(
+                        root_path=scan_result.root_path,
+                        video_files=[video_file],
+                        subtitle_files=[],  # Keep it simple
+                        ignored_files=[],
+                        total_size_bytes=video_file.size_bytes,
+                        scan_depth=1,
+                    )
+
+                    # Process this single video directly through movie resolver
+                    try:
+                        movie_match = await self._movie_resolver.resolve_movie(
+                            scan_result=single_scan,
+                            user_prompt=user_prompt,
+                            confidence_threshold=self._config.matching.confidence_threshold,
+                        )
+
+                        single_result = ProcessingResult(
+                            source_path=video_file.path,
+                            status=ProcessingStatus.SUCCESS,
+                            scan_result=single_scan,
+                            movie_match=movie_match,
+                            radarr_action=None,
+                            error_message=None,
+                            processing_time_seconds=1.0,  # Placeholder
+                            tmdb_url=None,
+                            radarr_url=None,
+                        )
+                    except Exception as e:
+                        single_result = ProcessingResult(
+                            source_path=video_file.path,
+                            status=ProcessingStatus.FAILED,
+                            scan_result=single_scan,
+                            movie_match=None,
+                            radarr_action=None,
+                            error_message=str(e),
+                            processing_time_seconds=1.0,
+                            tmdb_url=None,
+                            radarr_url=None,
+                        )
+                    summary.add_result(single_result)
+
+                # Convert summary to single result
                 result.status = (
                     ProcessingStatus.SUCCESS if summary.successful > 0 else ProcessingStatus.FAILED
                 )
-                result.error_message = f"Batch processed {summary.total_processed} movies: {summary.successful} successful, {summary.failed} failed"
+                result.error_message = f"Processed {summary.total_processed} movies: {summary.successful} successful, {summary.failed} failed"
                 return result
 
-            # Step 2: Resolve movie (single movie case)
+            # Single video file - process normally
             movie_match = await self._movie_resolver.resolve_movie(
                 scan_result=scan_result,
                 user_prompt=user_prompt,
@@ -408,27 +454,3 @@ class MovieOrchestrator(IMovieOrchestrator, LoggerMixin):
         from difflib import SequenceMatcher
 
         return SequenceMatcher(None, name1, name2).ratio()
-
-    def _create_individual_movie_paths(self, scan_result: ScanResult) -> List[Path]:
-        """Create individual movie paths for batch processing.
-
-        Args:
-            scan_result: Scan result with multiple movies.
-
-        Returns:
-            List of paths to process individually.
-        """
-        # Don't copy files! Just return the parent directories of each video file
-        individual_paths = []
-
-        try:
-            for video_file in scan_result.video_files:
-                # Just use the parent directory of each video file
-                # No copying needed - process files in place
-                individual_paths.append(video_file.path.parent)
-
-            return individual_paths
-
-        except Exception as e:
-            self.logger.error(f"Failed to create individual movie paths: {e}")
-            return []
