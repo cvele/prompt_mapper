@@ -6,11 +6,14 @@ A powerful, prompt-driven tool for matching local movie files with canonical met
 
 - **Prompt-driven matching**: Use natural language to describe your naming conventions
 - **Cross-platform support**: Works on macOS, Linux, and Windows
+- **Standalone binaries**: No Python installation required - just download and run
 - **Radarr integration**: Automatic movie addition and hard-link importing
 - **TMDb integration**: Accurate metadata matching
+- **Batch processing**: Efficiently handles directories with hundreds of movies
 - **Configurable**: YAML-based configuration with profiles
 - **Testable architecture**: Dependency injection and SOLID principles
 - **Dry-run mode**: Test matching without making changes
+- **Version support**: `--version` flag shows current version
 
 ## Quick Start
 
@@ -22,6 +25,17 @@ A powerful, prompt-driven tool for matching local movie files with canonical met
 - Radarr instance (optional)
 
 ### Installation
+
+#### Option 1: Download Standalone Binary (Recommended)
+
+1. Go to [Releases](https://github.com/your-username/prompt_mapper/releases)
+2. Download the binary for your platform:
+   - `prompt-mapper-windows.exe` (Windows)
+   - `prompt-mapper-linux` (Linux)
+   - `prompt-mapper-macos` (macOS)
+3. Make executable (Linux/macOS): `chmod +x prompt-mapper-*`
+
+#### Option 2: Install from Source
 
 ```bash
 # Clone the repository
@@ -47,24 +61,30 @@ cp config/config.example.yaml config/config.yaml
 ### Basic Usage
 
 ```bash
+# Check version
+prompt-mapper --version
+
+# Initialize configuration file
+prompt-mapper init
+
 # Scan a directory (automatically detects single movie vs multiple movies)
-prompt-mapper scan /path/to/movie/directory
+prompt-mapper -c config.yaml scan /path/to/movie/directory
 
 # Scan with custom prompt for Serbian/Croatian titles
-prompt-mapper scan /path/to/movies --prompt "Serbian and Croatian titles, translate to English"
+prompt-mapper -c config.yaml scan /path/to/movies --prompt "Serbian and Croatian titles, translate to English"
 
 # Dry run (no actual changes to Radarr)
-prompt-mapper scan /path/to/movies --dry-run
+prompt-mapper -c config.yaml scan /path/to/movies --dry-run
 
 # Non-interactive mode (auto-select best matches)
 # Edit config.yaml: set interactive: false
-prompt-mapper scan /path/to/movies
+prompt-mapper -c config.yaml scan /path/to/movies
 
 # Check system status
-prompt-mapper status
+prompt-mapper -c config.yaml status
 
 # Validate configuration
-prompt-mapper validate
+prompt-mapper -c config.yaml validate
 ```
 
 ## Working Examples
@@ -77,11 +97,12 @@ prompt-mapper scan /movies --prompt "Serbian titles, translate to English"
 # Result: Added to Radarr with TMDb ID
 ```
 
-### Flat Directory Processing
+### Large Directory Processing
 ```bash
-# Directory with 71 mixed movie files
-prompt-mapper scan /mixed_movies --prompt "Animated movies collection"
+# Directory with 290 mixed movie files
+prompt-mapper -c config.yaml scan /mixed_movies --prompt "Animated movies collection"
 # Behavior: Automatically detects multiple movies and processes each individually
+# Performance: Limits to first 20 movies to prevent overwhelming APIs
 # Result: Each movie gets analyzed separately by LLM and matched with TMDb
 ```
 
