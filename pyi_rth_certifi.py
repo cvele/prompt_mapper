@@ -1,10 +1,10 @@
 """
-PyInstaller runtime hook - disable SSL verification completely.
+PyInstaller runtime hook - disable SSL verification without ssl module.
 """
 
 import os
-import ssl
 
-# Just disable SSL verification, nothing else
+# Just set environment variables to disable SSL verification
 os.environ["PYTHONHTTPSVERIFY"] = "0"
-ssl._create_default_https_context = ssl._create_unverified_context
+os.environ["REQUESTS_CA_BUNDLE"] = ""
+os.environ["CURL_CA_BUNDLE"] = ""

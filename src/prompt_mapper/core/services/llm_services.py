@@ -270,7 +270,11 @@ class OpenAILLMService(BaseLLMService):
             raise LLMServiceError("OpenAI package not installed. Install with: pip install openai")
 
         try:
-            client = openai.AsyncOpenAI(api_key=self._llm_config.api_key)
+            # Disable SSL verification for OpenAI client
+            import httpx
+
+            http_client = httpx.AsyncClient(verify=False)
+            client = openai.AsyncOpenAI(api_key=self._llm_config.api_key, http_client=http_client)
 
             response = await client.chat.completions.create(
                 model=self._llm_config.model,
@@ -313,7 +317,13 @@ class AnthropicLLMService(BaseLLMService):
             )
 
         try:
-            client = anthropic.AsyncAnthropic(api_key=self._llm_config.api_key)
+            # Disable SSL verification for Anthropic client
+            import httpx
+
+            http_client = httpx.AsyncClient(verify=False)
+            client = anthropic.AsyncAnthropic(
+                api_key=self._llm_config.api_key, http_client=http_client
+            )
 
             response = await client.messages.create(
                 model=self._llm_config.model,

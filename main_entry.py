@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
 """Entry point for PyInstaller binary."""
 
-# DISABLE SSL VERIFICATION FIRST - BEFORE ANY OTHER IMPORTS
+# DISABLE SSL VERIFICATION WITHOUT USING SSL MODULE
 import os
-import ssl
 import sys
-
-# Always disable SSL verification - no conditions, just do it
-os.environ["PYTHONHTTPSVERIFY"] = "0"
-ssl._create_default_https_context = ssl._create_unverified_context
-
 from pathlib import Path
+
+# Set environment variables to disable SSL verification everywhere
+os.environ["PYTHONHTTPSVERIFY"] = "0"
+os.environ["REQUESTS_CA_BUNDLE"] = ""
+os.environ["CURL_CA_BUNDLE"] = ""
 
 # Add src to path so we can import prompt_mapper
 src_path = Path(__file__).parent / "src"

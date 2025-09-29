@@ -328,7 +328,13 @@ class TMDbService(ITMDbService, LoggerMixin):
         """
         if self._session is None:
             timeout = aiohttp.ClientTimeout(total=self._tmdb_config.timeout)
-            # Disable SSL verification completely
+            # Disable SSL verification and warnings
+            try:
+                import urllib3
+
+                urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+            except ImportError:
+                pass
             connector = aiohttp.TCPConnector(ssl=False)
             self._session = aiohttp.ClientSession(timeout=timeout, connector=connector)
         return self._session
