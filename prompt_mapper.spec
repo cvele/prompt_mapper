@@ -15,8 +15,6 @@ a = Analysis(
     datas=[
         # Include configuration example
         ('config/config.example.yaml', 'config/'),
-        # Include SSL certificates for HTTPS requests
-        (certifi.where(), 'cacert.pem'),
     ],
     hiddenimports=[
         # Core dependencies
