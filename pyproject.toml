@@ -9,7 +9,7 @@ description = "Prompt-driven movie file matching and Radarr integration"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
-    {name = "Prompt Movie Mapper Team", email = "contact@example.com"}
+    {name = "Vladimir Cvetic", email = "vladimir@cvetic.in.rs"}
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",

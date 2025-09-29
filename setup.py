@@ -13,7 +13,7 @@ with open(os.path.join(this_directory, "README.md"), encoding="utf-8") as f:
 setup(
     name="prompt-movie-mapper",
     version="0.1.0",
-    author="Prompt Movie Mapper Team",
+    author="Vladimir Cvetic",
     description="Prompt-driven movie file matching and Radarr integration",
     long_description=long_description,
     long_description_content_type="text/markdown",

@@ -7,6 +7,7 @@ from typing import List, Optional
 
 import click
 
+from .. import __version__
 from ..config import ConfigManager
 from ..core.models import ProcessingResult, SessionSummary
 from ..infrastructure import Container, setup_logging
@@ -22,6 +23,7 @@ from ..utils import ConfigurationError, PromptMapperError
 )
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose logging")
 @click.option("--dry-run", is_flag=True, help="Run without making changes")
+@click.version_option(version=__version__, prog_name="prompt-mapper")
 @click.pass_context
 def cli(ctx: click.Context, config: Optional[Path], verbose: bool, dry_run: bool) -> None:
     """Prompt-Based Movie Mapper - Match local movies with TMDb and Radarr."""
