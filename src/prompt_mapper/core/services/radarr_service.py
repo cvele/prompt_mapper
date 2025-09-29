@@ -385,26 +385,7 @@ class RadarrService(IRadarrService, LoggerMixin):
         """
         if self._session is None:
             timeout = aiohttp.ClientTimeout(total=self._radarr_config.timeout)
-
-            # Create SSL context with proper certificate handling
-            import ssl
-
-            ssl_context = None
-            try:
-                ssl_context = ssl.create_default_context()
-                # For PyInstaller, ensure we use the correct certificate path
-                import os
-
-                cert_file = os.environ.get("SSL_CERT_FILE")
-                if cert_file and os.path.exists(cert_file):
-                    ssl_context.load_verify_locations(cafile=cert_file)
-            except Exception:
-                # Fallback to default SSL context
-                ssl_context = None
-
-            # Create connector with SSL context
-            connector = aiohttp.TCPConnector(ssl=ssl_context) if ssl_context else None
-            self._session = aiohttp.ClientSession(timeout=timeout, connector=connector)
+            self._session = aiohttp.ClientSession(timeout=timeout)
         return self._session
 
     async def close(self) -> None:
