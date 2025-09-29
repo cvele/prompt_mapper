@@ -89,8 +89,9 @@ test: ## Run unit tests only
 test-unit: ## Run unit tests only
 	$(ACTIVATE) && pytest $(TESTS_DIR)/unit -v
 
-test-integration: ## Run integration tests (requires test environment)
+test-integration: integration-setup ## Run integration tests (requires test environment)
 	$(ACTIVATE) && pytest $(TESTS_DIR)/integration -v -m integration
+	$(MAKE) integration-teardown
 
 test-all: ## Run all tests
 	$(ACTIVATE) && pytest $(TESTS_DIR) -v
@@ -148,6 +149,15 @@ test-movies: ## Create test movie files
 	@python scripts/create_test_movies.py || (echo "⚠️ Test movies creation failed (likely permissions)" && exit 0)
 
 integration-setup: docker-up test-movies ## Set up complete integration test environment
+	@echo "Waiting for Radarr to be ready..."
+	@for i in {1..30}; do \
+		if curl -f http://localhost:7878/ping >/dev/null 2>&1; then \
+			echo "✅ Radarr is ready!"; \
+			break; \
+		fi; \
+		echo "⏳ Attempt $$i/30: Waiting for Radarr..."; \
+		sleep 2; \
+	done
 	@echo "Integration test environment ready!"
 
 integration-teardown: docker-down ## Tear down integration test environment
