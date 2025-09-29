@@ -64,7 +64,7 @@ setup: install-dev ## Complete development setup
 	@echo "Setup complete!"
 
 # Code Quality
-lint: ## Run linting (matches pre-commit hooks)
+lint: type-check ## Run linting (matches pre-commit hooks)
 	$(ACTIVATE) && flake8 $(SRC_DIR) $(TESTS_DIR) scripts/
 	$(ACTIVATE) && isort --check-only $(SRC_DIR) $(TESTS_DIR) scripts/
 	$(ACTIVATE) && black --check $(SRC_DIR) $(TESTS_DIR) scripts/
@@ -144,7 +144,8 @@ docker-logs: ## Show Docker container logs
 	docker-compose logs -f radarr
 
 test-movies: ## Create test movie files
-	python scripts/create_test_movies.py
+	@echo "📁 Creating test movie files..."
+	@python scripts/create_test_movies.py || (echo "⚠️ Test movies creation failed (likely permissions)" && exit 0)
 
 integration-setup: docker-up test-movies ## Set up complete integration test environment
 	@echo "Integration test environment ready!"

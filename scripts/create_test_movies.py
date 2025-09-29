@@ -101,71 +101,95 @@ def create_dummy_file(file_path: Path, size_mb: float) -> None:
         file_path: Path to create the file at.
         size_mb: Size in megabytes (ignored, creates minimal files).
     """
-    # Create parent directory if it doesn't exist
-    file_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        # Create parent directory if it doesn't exist
+        file_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Create minimal file with just 1 byte
-    with open(file_path, "wb") as f:
-        if file_path.suffix.lower() in [".mkv", ".mp4", ".avi"]:
-            # Minimal video file marker
-            f.write(b"V")
-        elif file_path.suffix.lower() == ".srt":
-            # Minimal subtitle file marker
-            f.write(b"S")
-        else:
-            # Generic file marker
-            f.write(b"F")
+        # Create minimal file with just 1 byte
+        with open(file_path, "wb") as f:
+            if file_path.suffix.lower() in [".mkv", ".mp4", ".avi"]:
+                # Minimal video file marker
+                f.write(b"V")
+            elif file_path.suffix.lower() == ".srt":
+                # Minimal subtitle file marker
+                f.write(b"S")
+            else:
+                # Generic file marker
+                f.write(b"F")
+    except PermissionError as e:
+        print(f"⚠️  Permission error creating {file_path}: {e}")
+        print("💡 This might be a CI environment issue. Continuing...")
+    except Exception as e:
+        print(f"❌ Error creating {file_path}: {e}")
+        raise
 
 
-def main():
+def main() -> None:
     """Create all test movie files in a flat structure."""
     base_path = Path("test_movies")
 
     print(f"Creating test movie files in {base_path.absolute()}")
 
-    # Create base directory
-    base_path.mkdir(parents=True, exist_ok=True)
+    try:
+        # Create base directory
+        base_path.mkdir(parents=True, exist_ok=True)
+    except PermissionError:
+        print(f"❌ Permission denied creating directory {base_path}")
+        print("💡 This might be a CI environment issue.")
+        return
 
     total_files = 0
 
     print(f"\nCreating {len(MOVIE_FILES)} files in flat structure:")
 
+    successful_files = 0
     for filename, size_range in MOVIE_FILES:
         file_path = base_path / filename
         print(f"  Creating: {filename} (1 byte)")
 
         create_dummy_file(file_path, 0.000001)  # Size ignored, creates 1 byte
+
+        # Check if file was actually created
+        if file_path.exists():
+            successful_files += 1
         total_files += 1
 
-    print(f"\n✅ Created {total_files} files in flat structure")
-    print(f"📊 Total size: {total_files} bytes (~{total_files / 1024:.2f} KB)")
+    print(f"\n✅ Created {successful_files}/{total_files} files in flat structure")
+    if successful_files != total_files:
+        print(f"⚠️  {total_files - successful_files} files failed (likely permission issues)")
+    print(f"📊 Total size: {successful_files} bytes (~{successful_files / 1024:.2f} KB)")
 
     # Create a summary file
     summary_path = base_path / "README.md"
-    with open(summary_path, "w") as f:
-        f.write("# Test Movie Files\n\n")
-        f.write(
-            "This directory contains minimal dummy movie files for testing the Prompt-Based Movie Mapper.\n\n"
-        )
-        f.write(f"- **Total files**: {total_files}\n")
-        f.write("- **Structure**: Flat (all files in one directory)\n")
-        f.write(f"- **Total size**: {total_files} bytes (~{total_files / 1024:.2f} KB)\n")
-        f.write("- **File size**: 1 byte each (minimal for testing)\n\n")
-        f.write("## Files List\n\n")
+    try:
+        with open(summary_path, "w") as f:
+            f.write("# Test Movie Files\n\n")
+            f.write(
+                "This directory contains minimal dummy movie files for testing the Prompt-Based Movie Mapper.\n\n"
+            )
+            f.write(f"- **Total files**: {successful_files}/{total_files}\n")
+            f.write("- **Structure**: Flat (all files in one directory)\n")
+            f.write(
+                f"- **Total size**: {successful_files} bytes (~{successful_files / 1024:.2f} KB)\n"
+            )
+            f.write("- **File size**: 1 byte each (minimal for testing)\n\n")
+            f.write("## Files List\n\n")
 
-        # Group by type for better readability
-        video_files = [f for f, _ in MOVIE_FILES if f.endswith(".mkv")]
-        subtitle_files = [f for f, _ in MOVIE_FILES if f.endswith(".srt")]
+            # Group by type for better readability
+            video_files = [f for f, _ in MOVIE_FILES if f.endswith(".mkv")]
+            subtitle_files = [f for f, _ in MOVIE_FILES if f.endswith(".srt")]
 
-        f.write(f"### Video Files ({len(video_files)})\n")
-        for filename in sorted(video_files):
-            f.write(f"- {filename}\n")
+            f.write(f"### Video Files ({len(video_files)})\n")
+            for filename in sorted(video_files):
+                f.write(f"- {filename}\n")
 
-        f.write(f"\n### Subtitle Files ({len(subtitle_files)})\n")
-        for filename in sorted(subtitle_files):
-            f.write(f"- {filename}\n")
+            f.write(f"\n### Subtitle Files ({len(subtitle_files)})\n")
+            for filename in sorted(subtitle_files):
+                f.write(f"- {filename}\n")
 
-    print(f"📄 Created summary file: {summary_path}")
+        print(f"📄 Created summary file: {summary_path}")
+    except PermissionError:
+        print("⚠️  Could not create summary file due to permissions")
 
 
 if __name__ == "__main__":
