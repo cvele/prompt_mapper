@@ -104,12 +104,36 @@ jobs:
           VERSION=${GITHUB_REF#refs/tags/v}
           echo "Updating version to: $VERSION"
 
-          # Update __init__.py with the release version
-          sed -i "s|__version__ = \".*\"|__version__ = \"$VERSION\"|" src/prompt_mapper/__init__.py
+          # Update __init__.py with Python (cross-platform)
+          python -c "
+          import re
+          import os
 
-          # Verify the change
-          grep "__version__" src/prompt_mapper/__init__.py
+          version = os.environ['VERSION']
+          init_file = 'src/prompt_mapper/__init__.py'
+
+          with open(init_file, 'r') as f:
+              content = f.read()
+
+          # Replace version
+          new_content = re.sub(r'__version__ = \".*\"', f'__version__ = \"{version}\"', content)
+
+          with open(init_file, 'w') as f:
+              f.write(new_content)
+
+          print(f'Updated __init__.py to version {version}')
+          "
+
+          # Verify the change (cross-platform)
+          python -c "
+          with open('src/prompt_mapper/__init__.py', 'r') as f:
+              for line in f:
+                  if '__version__' in line:
+                      print('Updated:', line.strip())
+          "
         shell: bash
+        env:
+          VERSION: ${GITHUB_REF#refs/tags/v}
 
       - name: Build distribution packages
         run: make build
@@ -156,12 +180,36 @@ jobs:
           VERSION=${GITHUB_REF#refs/tags/v}
           echo "Updating version to: $VERSION"
 
-          # Update __init__.py with the release version
-          sed -i "s|__version__ = \".*\"|__version__ = \"$VERSION\"|" src/prompt_mapper/__init__.py
+          # Update __init__.py with Python (cross-platform)
+          python -c "
+          import re
+          import os
 
-          # Verify the change
-          grep "__version__" src/prompt_mapper/__init__.py
+          version = os.environ['VERSION']
+          init_file = 'src/prompt_mapper/__init__.py'
+
+          with open(init_file, 'r') as f:
+              content = f.read()
+
+          # Replace version
+          new_content = re.sub(r'__version__ = \".*\"', f'__version__ = \"{version}\"', content)
+
+          with open(init_file, 'w') as f:
+              f.write(new_content)
+
+          print(f'Updated __init__.py to version {version}')
+          "
+
+          # Verify the change (cross-platform)
+          python -c "
+          with open('src/prompt_mapper/__init__.py', 'r') as f:
+              for line in f:
+                  if '__version__' in line:
+                      print('Updated:', line.strip())
+          "
         shell: bash
+        env:
+          VERSION: ${GITHUB_REF#refs/tags/v}
 
       - name: Build binary
         run: make build-binary
