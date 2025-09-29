@@ -98,6 +98,19 @@ jobs:
       - name: Install build dependencies
         run: make install-dev
 
+      - name: Update version in __init__.py
+        run: |
+          # Extract version from tag (remove 'v' prefix)
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "Updating version to: $VERSION"
+
+          # Update __init__.py with the release version
+          sed -i "s/__version__ = \".*\"/__version__ = \"$VERSION\"/" src/prompt_mapper/__init__.py
+
+          # Verify the change
+          grep "__version__" src/prompt_mapper/__init__.py
+        shell: bash
+
       - name: Build distribution packages
         run: make build
 
@@ -136,6 +149,19 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
+      - name: Update version in __init__.py
+        run: |
+          # Extract version from tag (remove 'v' prefix)
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "Updating version to: $VERSION"
+
+          # Update __init__.py with the release version
+          sed -i "s/__version__ = \".*\"/__version__ = \"$VERSION\"/" src/prompt_mapper/__init__.py
+
+          # Verify the change
+          grep "__version__" src/prompt_mapper/__init__.py
+        shell: bash
 
       - name: Build binary
         run: make build-binary
