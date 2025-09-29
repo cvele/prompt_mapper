@@ -3,7 +3,7 @@
 import os
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class LLMConfig(BaseModel):
@@ -16,7 +16,8 @@ class LLMConfig(BaseModel):
     temperature: float = Field(default=0.1, ge=0.0, le=2.0, description="Sampling temperature")
     timeout: int = Field(default=30, gt=0, description="Request timeout in seconds")
 
-    @validator("provider")
+    @field_validator("provider")
+    @classmethod
     def validate_provider(cls, v: str) -> str:
         """Validate LLM provider."""
         allowed = {"openai", "anthropic"}
@@ -24,7 +25,8 @@ class LLMConfig(BaseModel):
             raise ValueError(f"Provider must be one of: {allowed}")
         return v.lower()
 
-    @validator("api_key")
+    @field_validator("api_key")
+    @classmethod
     def validate_api_key(cls, v: str) -> str:
         """Expand environment variables in API key."""
         return os.path.expandvars(v)
@@ -42,7 +44,8 @@ class TMDbConfig(BaseModel):
         description="Rate limiting configuration",
     )
 
-    @validator("api_key")
+    @field_validator("api_key")
+    @classmethod
     def validate_api_key(cls, v: str) -> str:
         """Expand environment variables in API key."""
         return os.path.expandvars(v)
@@ -56,7 +59,8 @@ class RadarrProfileConfig(BaseModel):
     minimum_availability: str = Field(default="announced", description="Minimum availability")
     tags: List[str] = Field(default_factory=list, description="Default tags")
 
-    @validator("minimum_availability")
+    @field_validator("minimum_availability")
+    @classmethod
     def validate_availability(cls, v: str) -> str:
         """Validate minimum availability option."""
         allowed = {"announced", "inCinemas", "released", "preDB"}
@@ -73,7 +77,8 @@ class RadarrImportConfig(BaseModel):
         default=False, description="Delete empty folders after import"
     )
 
-    @validator("mode")
+    @field_validator("mode")
+    @classmethod
     def validate_mode(cls, v: str) -> str:
         """Validate import mode."""
         allowed = {"hardlink", "copy", "move"}
@@ -94,7 +99,8 @@ class RadarrConfig(BaseModel):
         default_factory=RadarrImportConfig, alias="import", description="Import configuration"
     )
 
-    @validator("api_key")
+    @field_validator("api_key")
+    @classmethod
     def validate_api_key(cls, v: str) -> str:
         """Expand environment variables in API key."""
         return os.path.expandvars(v)
@@ -108,12 +114,13 @@ class MatchingScoringConfig(BaseModel):
     popularity: float = Field(default=0.2, ge=0.0, le=1.0)
     language_match: float = Field(default=0.1, ge=0.0, le=1.0)
 
-    @validator("*")
-    def validate_weights_sum(cls, v: float, values: Dict[str, Any]) -> float:
+    @field_validator("title_similarity", "year_proximity", "popularity", "language_match")
+    @classmethod
+    def validate_weights_sum(cls, v: float, info) -> float:
         """Validate that all weights sum to approximately 1.0."""
         # This is called for each field, so we check the sum when we have all values
-        if len(values) == 3:  # All previous fields are set
-            total = sum(values.values()) + v
+        if info.data and len(info.data) == 3:  # All previous fields are set
+            total = sum(info.data.values()) + v
             if not (0.99 <= total <= 1.01):  # Allow small floating point errors
                 raise ValueError(f"Scoring weights must sum to 1.0, got {total}")
         return v
@@ -176,7 +183,8 @@ class LoggingConfig(BaseModel):
     max_size_mb: int = Field(default=10, gt=0, description="Maximum log file size in MB")
     backup_count: int = Field(default=5, ge=0, description="Number of backup log files")
 
-    @validator("level")
+    @field_validator("level")
+    @classmethod
     def validate_level(cls, v: str) -> str:
         """Validate logging level."""
         allowed = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
@@ -215,8 +223,7 @@ class Config(BaseModel):
     )
     app: AppConfig = Field(default_factory=AppConfig, description="Application configuration")
 
-    class Config:
-        """Pydantic configuration."""
-
-        validate_by_name = True
-        validate_assignment = True
+    model_config = ConfigDict(
+        validate_assignment=True,
+        populate_by_name=True,
+    )

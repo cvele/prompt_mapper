@@ -146,10 +146,12 @@ docker-logs: ## Show Docker container logs
 
 test-movies: ## Create test movie files
 	@echo "📁 Creating test movie files..."
-	@python scripts/create_test_movies.py || (echo "⚠️ Test movies creation failed (likely permissions)" && exit 0)
+	@echo "💡 Using MOVIES_DIR: $${MOVIES_DIR:-./test_movies}"
+	@LC_ALL=C.UTF-8 LANG=C.UTF-8 python scripts/create_test_movies.py || (echo "⚠️ Test movies creation failed (likely permissions)" && exit 0)
 
 integration-setup: docker-up test-movies ## Set up complete integration test environment
 	@echo "Waiting for Radarr to be ready..."
+	@echo "💡 Test movies location: $${MOVIES_DIR:-./test_movies}"
 	@for i in {1..30}; do \
 		if curl -f http://localhost:7878/ping >/dev/null 2>&1; then \
 			echo "✅ Radarr is ready!"; \

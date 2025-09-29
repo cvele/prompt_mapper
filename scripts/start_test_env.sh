@@ -14,6 +14,17 @@ fi
 # Create necessary directories
 mkdir -p docker/radarr/{config,movies,downloads}
 
+# Set up environment for proper UID/GID handling
+if [ -z "$PUID" ]; then
+    export PUID=$(id -u)
+fi
+if [ -z "$PGID" ]; then
+    export PGID=$(id -g)
+fi
+
+echo "🔧 Using PUID=$PUID, PGID=$PGID for Docker containers"
+echo "📁 Test movies directory: ${MOVIES_DIR:-./test_movies}"
+
 # Start services
 echo "📦 Starting Radarr container..."
 if command -v docker-compose >/dev/null 2>&1; then
@@ -55,6 +66,8 @@ echo "📍 Radarr: http://localhost:7878"
 echo "📁 Config: ./docker/radarr/config"
 echo "🎬 Movies: ./docker/radarr/movies"
 echo "📥 Downloads: ./docker/radarr/downloads"
+echo "🧪 Test movies: ${MOVIES_DIR:-./test_movies}"
+echo "👤 Container UID/GID: $PUID/$PGID"
 echo ""
 echo "💡 To stop the environment: ./scripts/stop_test_env.sh"
 echo "🧪 To run integration tests: make test-integration"

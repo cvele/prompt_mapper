@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class FileInfo(BaseModel):
@@ -30,10 +30,7 @@ class FileInfo(BaseModel):
             f"{self.directory_name}/{self.name}" if self.directory_name != self.name else self.name
         )
 
-    class Config:
-        """Pydantic configuration."""
-
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 class ScanResult(BaseModel):
@@ -66,7 +63,4 @@ class ScanResult(BaseModel):
         """Check if there are multiple video files."""
         return len(self.video_files) > 1
 
-    class Config:
-        """Pydantic configuration."""
-
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)

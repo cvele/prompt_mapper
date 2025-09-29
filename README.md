@@ -97,6 +97,35 @@ prompt-mapper scan /movies  # No user prompts, processes automatically
 
 ## Development
 
+### Environment Variables
+
+The project supports several environment variables for configuration and CI/CD:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MOVIES_DIR` | Directory for test movie files | `./test_movies` |
+| `PUID` | Docker container user ID | `1000` |
+| `PGID` | Docker container group ID | `1000` |
+| `LC_ALL` | Locale setting for UTF-8 support | `C.UTF-8` |
+| `LANG` | Language setting | `C.UTF-8` |
+
+#### CI/CD Considerations
+
+In CI environments, the test movie creation automatically uses `$RUNNER_TEMP/test_movies` for guaranteed write permissions. The UTF-8 locale is also automatically set to handle filenames with special characters (č, ć, š, ž).
+
+For local development with Docker:
+```bash
+# Set proper UID/GID to match your user
+export PUID=$(id -u)
+export PGID=$(id -g)
+
+# Use a custom test movies directory
+export MOVIES_DIR=/tmp/test_movies
+
+# Start test environment
+make integration-setup
+```
+
 ### Make Commands
 
 ```bash

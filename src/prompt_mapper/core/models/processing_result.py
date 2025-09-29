@@ -4,7 +4,7 @@ from enum import Enum
 from pathlib import Path
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from .file_info import ScanResult
 from .movie import MovieMatch
@@ -33,16 +33,13 @@ class RadarrAction(str, Enum):
 class ImportResult(BaseModel):
     """File import result."""
 
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     file_path: Path = Field(..., description="Original file path")
     imported: bool = Field(..., description="Whether import was successful")
     target_path: Optional[Path] = Field(None, description="Target path after import")
     error: Optional[str] = Field(None, description="Error message if import failed")
     method: Optional[str] = Field(None, description="Import method used (hardlink, copy, move)")
-
-    class Config:
-        """Pydantic configuration."""
-
-        arbitrary_types_allowed = True
 
 
 class ProcessingResult(BaseModel):
@@ -78,10 +75,7 @@ class ProcessingResult(BaseModel):
         """Total count of files processed."""
         return len(self.import_results)
 
-    class Config:
-        """Pydantic configuration."""
-
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 class SessionSummary(BaseModel):

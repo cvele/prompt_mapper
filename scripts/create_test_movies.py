@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Create test movie files based on the provided image structure."""
 
+import locale
+import os
+import sys
 from pathlib import Path
 
 # Movie files from the screenshot - flat structure (filename, unused_size_range)
@@ -126,16 +129,56 @@ def create_dummy_file(file_path: Path, size_mb: float) -> None:
 
 def main() -> None:
     """Create all test movie files in a flat structure."""
-    base_path = Path("test_movies")
+    # Force UTF-8 locale for proper handling of special characters
+    try:
+        locale.setlocale(locale.LC_ALL, "C.UTF-8")
+    except locale.Error:
+        try:
+            locale.setlocale(locale.LC_ALL, "en_US.UTF-8")
+        except locale.Error:
+            print("⚠️  Could not set UTF-8 locale, special characters may not work properly")
+
+    # Respect MOVIES_DIR environment variable, fallback to RUNNER_TEMP in CI, then test_movies
+    movies_dir = os.environ.get("MOVIES_DIR")
+    if not movies_dir:
+        # In CI environments, use RUNNER_TEMP for guaranteed write access
+        runner_temp = os.environ.get("RUNNER_TEMP")
+        if runner_temp:
+            movies_dir = os.path.join(runner_temp, "test_movies")
+            print(f"💡 Using CI temp directory: {movies_dir}")
+        else:
+            movies_dir = "test_movies"
+
+    base_path = Path(movies_dir).resolve()
 
     print(f"Creating test movie files in {base_path.absolute()}")
 
     try:
-        # Create base directory
-        base_path.mkdir(parents=True, exist_ok=True)
-    except PermissionError:
-        print(f"❌ Permission denied creating directory {base_path}")
-        print("💡 This might be a CI environment issue.")
+        # Create base directory with proper permissions
+        base_path.mkdir(parents=True, exist_ok=True, mode=0o755)
+        print(f"📁 Base directory created/verified: {base_path}")
+
+        # Test write permissions
+        test_file = base_path / ".write_test"
+        try:
+            test_file.write_text("test")
+            test_file.unlink()
+            print("✅ Write permissions verified")
+        except PermissionError:
+            print(f"❌ No write permissions in {base_path}")
+            print(
+                "💡 Try setting MOVIES_DIR to a writable directory or running with proper permissions"
+            )
+            return
+    except PermissionError as e:
+        print(f"❌ Permission denied creating directory {base_path}: {e}")
+        print("💡 Solutions:")
+        print("   - Set MOVIES_DIR environment variable to a writable directory")
+        print("   - In CI: Use $RUNNER_TEMP (should be set automatically)")
+        print("   - Run with appropriate permissions or change directory ownership")
+        return
+    except Exception as e:
+        print(f"❌ Unexpected error creating directory {base_path}: {e}")
         return
 
     total_files = 0

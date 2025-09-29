@@ -72,7 +72,7 @@ jobs:
     name: Integration Tests
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       actions: read
 
     steps:
@@ -92,12 +92,30 @@ jobs:
       - name: Set up Docker
         uses: docker/setup-buildx-action@v3
 
+      - name: Set up test environment
+        run: |
+          # Force UTF-8 locale for proper handling of special characters
+          export LC_ALL=C.UTF-8
+          export LANG=C.UTF-8
+          # Use RUNNER_TEMP for test artifacts to ensure write permissions
+          export MOVIES_DIR="$RUNNER_TEMP/test_movies"
+          echo "MOVIES_DIR=$MOVIES_DIR" >> $GITHUB_ENV
+          echo "LC_ALL=C.UTF-8" >> $GITHUB_ENV
+          echo "LANG=C.UTF-8" >> $GITHUB_ENV
+          # Create the directory with proper permissions
+          mkdir -p "$MOVIES_DIR"
+          chmod 755 "$MOVIES_DIR"
+          echo "Test movies directory: $MOVIES_DIR"
+
       - name: Run integration tests
         run: make test-integration
         env:
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           RADARR_API_KEY: test-api-key
+          MOVIES_DIR: ${{ env.MOVIES_DIR }}
+          LC_ALL: ${{ env.LC_ALL }}
+          LANG: ${{ env.LANG }}
 
       - name: Clean up test environment
         if: always()

@@ -3,14 +3,15 @@ services:
     image: lscr.io/linuxserver/radarr:latest
     container_name: prompt-mapper-radarr
     environment:
-      - PUID=1000
-      - PGID=1000
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
       - TZ=UTC
+      - UMASK=022  # Ensure proper file permissions
     volumes:
       - ./docker/radarr/config:/config
       - ./docker/radarr/movies:/movies
       - ./docker/radarr/downloads:/downloads
-      - ./test_movies:/test_movies:ro  # Read-only mount for test files
+      - ${MOVIES_DIR:-./test_movies}:/test_movies:ro  # Support env var for test files location
     ports:
       - "7878:7878"
     restart: unless-stopped
