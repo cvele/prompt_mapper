@@ -1,7 +1,10 @@
 """Radarr service implementation."""
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
+if TYPE_CHECKING:
+    import aiohttp
 
 from ...config.models import Config
 from ...infrastructure.logging import LoggerMixin
@@ -22,7 +25,7 @@ class RadarrService(IRadarrService, LoggerMixin):
         """
         self._config = config
         self._radarr_config = config.radarr
-        self._session = None
+        self._session: Optional["aiohttp.ClientSession"] = None
         # Using manual HTTP requests for better control
 
     async def get_movie_by_tmdb_id(self, tmdb_id: int) -> Optional[RadarrMovie]:
@@ -375,7 +378,7 @@ class RadarrService(IRadarrService, LoggerMixin):
         except Exception as e:
             self.logger.warning(f"Failed to trigger movie rescan: {e}")
 
-    def _get_session(self):
+    def _get_session(self) -> "aiohttp.ClientSession":
         """Get or create HTTP session.
 
         Returns:

@@ -1,6 +1,9 @@
 """TMDb service implementation."""
 
-from typing import Any, List, Optional
+from typing import TYPE_CHECKING, Any, List, Optional
+
+if TYPE_CHECKING:
+    import aiohttp
 
 from ...config.models import Config
 from ...infrastructure.logging import LoggerMixin
@@ -20,7 +23,7 @@ class TMDbService(ITMDbService, LoggerMixin):
         """
         self._config = config
         self._tmdb_config = config.tmdb
-        self._session = None
+        self._session: Optional["aiohttp.ClientSession"] = None
 
     async def search_movies(
         self, llm_response: LLMResponse, max_results: int = 10
@@ -318,7 +321,7 @@ class TMDbService(ITMDbService, LoggerMixin):
             "weighted_language": language_score * scoring_config.language_match,
         }
 
-    def _get_session(self):
+    def _get_session(self) -> "aiohttp.ClientSession":
         """Get or create HTTP session.
 
         Returns:
