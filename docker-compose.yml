@@ -1,0 +1,40 @@
+services:
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: prompt-mapper-radarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=UTC
+    volumes:
+      - ./docker/radarr/config:/config
+      - ./docker/radarr/movies:/movies
+      - ./docker/radarr/downloads:/downloads
+      - ./test_movies:/test_movies:ro  # Read-only mount for test files
+    ports:
+      - "7878:7878"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7878/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # Optional: Add a simple web server to serve test files
+  test-server:
+    image: nginx:alpine
+    container_name: prompt-mapper-test-server
+    volumes:
+      - ./test_movies:/usr/share/nginx/html:ro
+      - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    profiles:
+      - testing
+
+volumes:
+  radarr_config:
+  radarr_movies:
+  radarr_downloads:

@@ -1,0 +1,213 @@
+# Prompt-Based Movie Mapper
+
+A powerful, prompt-driven tool for matching local movie files with canonical metadata and integrating with Radarr for automated library management.
+
+## Features
+
+- **Prompt-driven matching**: Use natural language to describe your naming conventions
+- **Cross-platform support**: Works on macOS, Linux, and Windows
+- **Radarr integration**: Automatic movie addition and hard-link importing
+- **TMDb integration**: Accurate metadata matching
+- **Configurable**: YAML-based configuration with profiles
+- **Testable architecture**: Dependency injection and SOLID principles
+- **Dry-run mode**: Test matching without making changes
+
+## Quick Start
+
+### Prerequisites
+
+- Python 3.8 or higher
+- Make (for build automation)
+- TMDb API key
+- Radarr instance (optional)
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/your-username/prompt_mapper.git
+cd prompt_mapper
+
+# Set up development environment
+make setup
+
+# Or just install the package
+make install
+```
+
+### Configuration
+
+1. Copy the example configuration:
+```bash
+cp config/config.example.yaml config/config.yaml
+```
+
+2. Edit `config/config.yaml` with your API keys and preferences.
+
+### Basic Usage
+
+```bash
+# Scan a directory (automatically detects single movie vs multiple movies)
+prompt-mapper scan /path/to/movie/directory
+
+# Scan with custom prompt for Serbian/Croatian titles
+prompt-mapper scan /path/to/movies --prompt "Serbian and Croatian titles, translate to English"
+
+# Dry run (no actual changes to Radarr)
+prompt-mapper scan /path/to/movies --dry-run
+
+# Non-interactive mode (auto-select best matches)
+# Edit config.yaml: set interactive: false
+prompt-mapper scan /path/to/movies
+
+# Check system status
+prompt-mapper status
+
+# Validate configuration
+prompt-mapper validate
+```
+
+## Working Examples
+
+### Serbian/Croatian Title Translation
+```bash
+# Input file: "Beli očnjak (2018).mkv"
+prompt-mapper scan /movies --prompt "Serbian titles, translate to English"
+# Output: Successfully identifies as "White Fang (2018)"
+# Result: Added to Radarr with TMDb ID
+```
+
+### Flat Directory Processing
+```bash
+# Directory with 71 mixed movie files
+prompt-mapper scan /mixed_movies --prompt "Animated movies collection"
+# Behavior: Automatically detects multiple movies and processes each individually
+# Result: Each movie gets analyzed separately by LLM and matched with TMDb
+```
+
+### Interactive vs Automated
+```bash
+# Interactive: Prompts for user confirmation
+prompt-mapper scan /movies  # Uses config: interactive: true
+
+# Automated: Auto-selects best matches
+# Edit config.yaml: set interactive: false
+prompt-mapper scan /movies  # No user prompts, processes automatically
+```
+
+## Development
+
+### Make Commands
+
+```bash
+make help              # Show all available commands
+make setup             # Complete development setup
+make test-unit         # Run unit tests
+make test-integration  # Run integration tests (requires Docker)
+make test-all          # Run all tests
+make lint              # Run linting
+make format            # Format code
+make type-check        # Run type checking
+make check             # Run all checks (lint, type-check, unit tests)
+make clean             # Clean generated files
+
+# Testing and Demo
+make run-test          # Interactive test with test movies (prompts for input)
+make run-test-auto     # Automated test (no prompts, auto-selects)
+make docker-up         # Start Radarr test environment
+make docker-down       # Stop test environment
+```
+
+### Integration Testing
+
+The project includes comprehensive integration tests with a Docker-based test environment:
+
+```bash
+# Complete integration test setup and run
+./scripts/run_integration_tests.sh
+
+# Or step by step:
+make integration-setup  # Start Radarr + create minimal test movies (~332KB)
+make test-integration   # Run integration tests
+make integration-teardown # Clean up
+```
+
+**Test Environment Includes:**
+- Radarr instance in Docker (v5.27.5.10198)
+- 82 minimal dummy movie files (~332KB total) in flat structure
+- Serbian/Croatian titles: "Beli očnjak", "Čarobni princ", etc.
+- Real API integration: OpenAI (gpt-4o-mini), TMDb, Radarr
+- Automatic batch detection for multiple movies
+
+### Project Structure
+
+```
+src/prompt_mapper/
+├── __init__.py
+├── cli/                    # Command-line interface
+├── config/                 # Configuration management
+├── core/                   # Core business logic
+│   ├── interfaces/         # Abstract interfaces
+│   ├── models/            # Data models
+│   └── services/          # Service implementations
+├── external/              # External API clients
+├── infrastructure/        # Infrastructure concerns
+└── utils/                 # Utility functions
+
+tests/                     # Test suite
+config/                    # Configuration files
+```
+
+## Architecture
+
+This project follows SOLID principles with dependency injection:
+
+- **Single Responsibility**: Each class has one reason to change
+- **Open/Closed**: Extensible through interfaces
+- **Liskov Substitution**: Implementations are interchangeable
+- **Interface Segregation**: Small, focused interfaces
+- **Dependency Inversion**: Depend on abstractions, not concretions
+
+## Configuration
+
+The application uses YAML configuration with environment variable expansion:
+
+```yaml
+llm:
+  provider: "openai"  # or "anthropic"
+  model: "gpt-4o-mini"  # Working model
+  api_key: "${OPENAI_API_KEY}"
+
+tmdb:
+  api_key: "${TMDB_API_KEY}"
+  language: "en-US"
+
+radarr:
+  enabled: true
+  url: "http://localhost:7878"
+  api_key: "${RADARR_API_KEY}"
+  default_profile:
+    quality_profile_id: 1
+    root_folder_path: "/movies"
+
+matching:
+  confidence_threshold: 0.95  # High for interactive prompts
+  year_tolerance: 1
+  auto_add_to_radarr: false
+
+app:
+  interactive: true  # Set to false for automated processing
+```
+
+### Environment Variables
+
+Create a `.env` file with your API keys:
+```bash
+OPENAI_API_KEY=your_openai_key
+TMDB_API_KEY=your_tmdb_key
+RADARR_API_KEY=your_radarr_key
+```
+
+## License
+
+MIT License - see LICENSE file for details.

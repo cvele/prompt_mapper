@@ -1,0 +1,107 @@
+# Prompt-Based Movie Mapper Configuration
+# Copy this file to config.yaml and customize for your environment
+
+# LLM Provider Configuration
+llm:
+  provider: "openai"  # Options: "openai", "anthropic"
+  model: "gpt-4o-mini"      # Model to use for prompt resolution
+  api_key: "${OPENAI_API_KEY}"  # Environment variable reference
+  max_tokens: 1000
+  temperature: 0.1
+  timeout: 30
+
+# TMDb Configuration
+tmdb:
+  api_key: "${TMDB_API_KEY}"
+  base_url: "https://api.themoviedb.org/3"
+  language: "en-US"
+  timeout: 10
+  rate_limit:
+    requests_per_second: 4
+    burst_limit: 10
+
+# Radarr Configuration
+radarr:
+  enabled: true
+  url: "http://localhost:7878"
+  api_key: "${RADARR_API_KEY}"
+  timeout: 30
+  default_profile:
+    quality_profile_id: 1
+    root_folder_path: "/movies"
+    minimum_availability: "announced"  # announced, inCinemas, released, preDB
+    tags: []
+  import:
+    mode: "hardlink"  # Options: "hardlink", "copy", "move"
+    delete_empty_folders: false
+
+# Matching Configuration
+matching:
+  confidence_threshold: 0.8
+  year_tolerance: 1
+  max_search_results: 10
+  auto_add_to_radarr: false
+  auto_import: false
+  skip_existing: true
+
+  # Scoring weights for TMDb matching
+  scoring:
+    title_similarity: 0.4
+    year_proximity: 0.3
+    popularity: 0.2
+    language_match: 0.1
+
+# File Processing
+files:
+  extensions:
+    video: [".mkv", ".mp4", ".avi", ".mov", ".wmv", ".flv", ".webm", ".m4v"]
+    subtitle: [".srt", ".sub", ".idx", ".ass", ".ssa", ".vtt"]
+  ignore_patterns:
+    - "sample"
+    - "trailer"
+    - "extras"
+    - "behind.the.scenes"
+  min_file_size_mb: 100
+  scan_depth: 2
+
+# Default Prompts
+prompts:
+  default: |
+    Analyze the following movie filename/folder name and extract the canonical movie information.
+    Consider common naming patterns, release years, and quality indicators.
+    Ignore release group tags and technical details.
+
+  profiles:
+    international: |
+      The titles may be in various languages including Serbian, Bosnian, Croatian, or other non-English languages.
+      Translate to the original English title or the most widely recognized international title.
+      Consider transliteration from Cyrillic scripts.
+      Years in filenames typically represent release years.
+
+    festival: |
+      These may be festival releases or art house films.
+      Prefer official festival titles if the film is well-known from film festivals.
+      Consider that the year might be the festival year rather than general release year.
+
+    collection: |
+      These files are from a curated collection and may have specific naming conventions.
+      Look for director's cuts, extended editions, or special releases.
+      Pay attention to edition indicators in the filename.
+
+# Logging Configuration
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "logs/prompt_mapper.log"
+  max_size_mb: 10
+  backup_count: 5
+
+# Application Behavior
+app:
+  dry_run: false
+  interactive: true
+  batch_size: 10
+  parallel_workers: 3
+  retry_attempts: 3
+  cache_enabled: true
+  cache_ttl_hours: 24

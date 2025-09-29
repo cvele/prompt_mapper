@@ -1,0 +1,144 @@
+name: Code Quality
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+  push:
+    branches: [ main, develop ]
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  lint-and-format:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install development dependencies
+        run: make install-dev
+
+      - name: Run linting checks
+        run: make lint
+
+      - name: Run type checking
+        run: make type-check
+
+      - name: Check code formatting
+        run: |
+          # This will fail if any files need formatting
+          source .venv/bin/activate && black --check --diff src tests
+
+      - name: Check import sorting
+        run: |
+          source .venv/bin/activate && isort --check-only --diff src tests
+
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: make install-dev
+
+      - name: Run unit tests
+        run: make test-unit
+
+      - name: Upload coverage reports
+        if: matrix.python-version == '3.11'
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: make install-dev
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Start test environment
+        run: make docker-up
+
+      - name: Wait for services
+        run: |
+          echo "Waiting for Radarr to be ready..."
+          timeout 60 bash -c 'until curl -f http://localhost:7878/ping; do sleep 2; done'
+
+      - name: Set up Radarr
+        run: ./scripts/setup_radarr.sh
+        env:
+          RADARR_API_KEY: test-api-key
+
+      - name: Create test movies
+        run: make test-movies
+
+      - name: Run integration tests
+        run: make test-integration
+        env:
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          RADARR_API_KEY: test-api-key
+
+      - name: Clean up test environment
+        if: always()
+        run: make docker-down
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: make install-dev
+
+      - name: Run security scan
+        run: |
+          source .venv/bin/activate
+          pip install safety bandit
+          safety check --json || true
+          bandit -r src/ -f json || true
+
+      - name: Run dependency check
+        run: |
+          source .venv/bin/activate
+          pip install pip-audit
+          pip-audit || true
