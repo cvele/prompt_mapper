@@ -5,7 +5,7 @@ natural language prompts and integrating with Radarr for automated
 library management.
 """
 
-__version__ = "0.1.16"
+__version__ = "0.1.17"
 
 __author__ = "Vladimir Cvetic"
 __email__ = "vladimir@cvetic.in.rs"
