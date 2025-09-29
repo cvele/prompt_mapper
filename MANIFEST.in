@@ -1,0 +1,63 @@
+# MANIFEST.in - Control what gets included in the source distribution
+
+# Include essential files
+include README.md
+include LICENSE
+include requirements.txt
+include requirements-dev.txt
+include pyproject.toml
+include Makefile
+include .flake8
+include .pre-commit-config.yaml
+include DEVELOPMENT.md
+include functional_requirements.md
+include docker-compose.yml
+
+# Include configuration examples (but not real configs)
+include config/config.example.yaml
+
+# Include scripts
+recursive-include scripts *.py *.sh
+
+# Include tests
+recursive-include tests *.py
+
+# Include source code
+recursive-include src *.py
+
+# Include docker files for testing and development
+include docker/README.md
+include docker/nginx.conf
+graft docker
+prune docker/radarr/movies
+prune docker/radarr/downloads
+
+# Include examples
+recursive-include examples *.md
+
+# Include GitHub workflows
+recursive-include .github *.yml *.yaml
+
+# Exclude sensitive files explicitly
+exclude .env
+exclude config/config.yaml
+global-exclude *.db
+global-exclude *.db-*
+global-exclude *.pid
+global-exclude *.log
+global-exclude **/config.xml
+global-exclude **/key-*.xml
+global-exclude **/.DS_Store
+global-exclude **/Thumbs.db
+
+# Exclude test artifacts
+global-exclude test_movies/
+global-exclude .pytest_cache/
+global-exclude .coverage
+global-exclude htmlcov/
+
+# Exclude IDE files
+global-exclude .vscode/
+global-exclude .idea/
+global-exclude *.swp
+global-exclude *.swo

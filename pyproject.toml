@@ -56,6 +56,10 @@ prompt-mapper = "prompt_mapper.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+# Only include essential package data, no sensitive config files
+"*" = ["*.txt", "*.md"]
+
 [tool.setuptools_scm]
 write_to = "src/prompt_mapper/_version.py"
 
