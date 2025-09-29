@@ -385,13 +385,8 @@ class RadarrService(IRadarrService, LoggerMixin):
         """
         if self._session is None:
             timeout = aiohttp.ClientTimeout(total=self._radarr_config.timeout)
-            # Disable SSL verification for PyInstaller compatibility
-            import ssl
-
-            ssl_context = ssl.create_default_context()
-            ssl_context.check_hostname = False
-            ssl_context.verify_mode = ssl.CERT_NONE
-            connector = aiohttp.TCPConnector(ssl=ssl_context)
+            # Disable SSL verification completely
+            connector = aiohttp.TCPConnector(ssl=False)
             self._session = aiohttp.ClientSession(timeout=timeout, connector=connector)
         return self._session
 
