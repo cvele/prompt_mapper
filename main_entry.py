@@ -8,7 +8,7 @@ from pathlib import Path
 # Configure SSL certificates for PyInstaller (must be done early)
 if hasattr(sys, "_MEIPASS"):
     # PyInstaller frozen app - set certificate path
-    cert_path = Path(sys._MEIPASS) / "certifi" / "cacert.pem"
+    cert_path = Path(sys._MEIPASS) / "cacert.pem"
     if cert_path.exists():
         os.environ["REQUESTS_CA_BUNDLE"] = str(cert_path)
         # Debug: verify certificate file
@@ -29,10 +29,6 @@ if hasattr(sys, "_MEIPASS"):
             print(f"DEBUG: Contents of {meipass_path}:")
             for item in meipass_path.iterdir():
                 print(f"  - {item}")
-            if (meipass_path / "certifi").exists():
-                print(f"DEBUG: Contents of certifi directory:")
-                for item in (meipass_path / "certifi").iterdir():
-                    print(f"  - {item}")
         except Exception as e:
             print(f"DEBUG: Failed to list directory: {e}")
 
