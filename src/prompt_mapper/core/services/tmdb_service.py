@@ -1,9 +1,8 @@
 """TMDb service implementation."""
 
-from typing import TYPE_CHECKING, Any, List, Optional
+from typing import Any, List, Optional
 
-if TYPE_CHECKING:
-    import aiohttp
+import httpx
 
 from ...config.models import Config
 from ...infrastructure.logging import LoggerMixin
@@ -23,7 +22,7 @@ class TMDbService(ITMDbService, LoggerMixin):
         """
         self._config = config
         self._tmdb_config = config.tmdb
-        self._session: Optional["aiohttp.ClientSession"] = None
+        self._client: Optional["httpx.AsyncClient"] = None
 
     async def search_movies(
         self, llm_response: LLMResponse, max_results: int = 10
@@ -113,12 +112,12 @@ class TMDbService(ITMDbService, LoggerMixin):
             url = f"{self._tmdb_config.base_url}/movie/{tmdb_id}"
             params = {"api_key": self._tmdb_config.api_key, "language": self._tmdb_config.language}
 
-            async with self._get_session().get(url, params=params) as response:
-                if response.status == 404:
-                    return None
-                response.raise_for_status()
-                data = await response.json()
-                return self._parse_movie_result(data)
+            response = await self._get_client().get(url, params=params)
+            if response.status_code == 404:
+                return None
+            response.raise_for_status()
+            data = response.json()
+            return self._parse_movie_result(data)
 
         except Exception as e:
             error_msg = f"Failed to get movie details for TMDb ID {tmdb_id}: {e}"
@@ -141,14 +140,14 @@ class TMDbService(ITMDbService, LoggerMixin):
             url = f"{self._tmdb_config.base_url}/find/{imdb_id}"
             params = {"api_key": self._tmdb_config.api_key, "external_source": "imdb_id"}
 
-            async with self._get_session().get(url, params=params) as response:
-                response.raise_for_status()
-                data = await response.json()
+            response = await self._get_client().get(url, params=params)
+            response.raise_for_status()
+            data = response.json()
 
-                if data.get("movie_results"):
-                    return self._parse_movie_result(data["movie_results"][0])
+            if data.get("movie_results"):
+                return self._parse_movie_result(data["movie_results"][0])
 
-                return None
+            return None
 
         except Exception as e:
             error_msg = f"Failed to get movie by IMDb ID {imdb_id}: {e}"
@@ -226,13 +225,13 @@ class TMDbService(ITMDbService, LoggerMixin):
         if year:
             params["year"] = str(year)
 
-        async with self._get_session().get(url, params=params) as response:
-            response.raise_for_status()
-            data = await response.json()
-            results = data.get("results", [])
-            if not isinstance(results, list):
-                return []
-            return results
+        response = await self._get_client().get(url, params=params)
+        response.raise_for_status()
+        data = response.json()
+        results = data.get("results", [])
+        if not isinstance(results, list):
+            return []
+        return results
 
     def _parse_movie_result(self, data: dict) -> MovieInfo:
         """Parse TMDb movie result into MovieInfo.
@@ -321,32 +320,25 @@ class TMDbService(ITMDbService, LoggerMixin):
             "weighted_language": language_score * scoring_config.language_match,
         }
 
-    def _get_session(self) -> "aiohttp.ClientSession":
-        """Get or create HTTP session.
+    def _get_client(self) -> "httpx.AsyncClient":
+        """Get or create HTTP client.
 
         Returns:
-            HTTP session.
+            HTTP client.
         """
-        if self._session is None:
-            import aiohttp
-
-            timeout = aiohttp.ClientTimeout(total=self._tmdb_config.timeout)
-            # Disable SSL verification and warnings
-            try:
-                import urllib3
-
-                urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-            except ImportError:
-                pass
-            connector = aiohttp.TCPConnector(ssl=False)
-            self._session = aiohttp.ClientSession(timeout=timeout, connector=connector)
-        return self._session
+        if self._client is None:
+            # Simple httpx client with SSL verification disabled
+            self._client = httpx.AsyncClient(
+                timeout=self._tmdb_config.timeout,
+                verify=False,
+            )
+        return self._client
 
     async def close(self) -> None:
-        """Close HTTP session."""
-        if self._session:
-            await self._session.close()
-            self._session = None
+        """Close HTTP client."""
+        if self._client:
+            await self._client.aclose()
+            self._client = None
 
     async def __aenter__(self) -> "TMDbService":
         """Async context manager entry."""
@@ -359,7 +351,7 @@ class TMDbService(ITMDbService, LoggerMixin):
     def __del__(self) -> None:
         """Cleanup on deletion."""
         # Just log that cleanup is needed, don't try to clean up here
-        if self._session and not self._session.closed:
+        if self._client and not self._client.is_closed:
             import logging
 
-            logging.getLogger(__name__).debug("TMDbService session not properly closed")
+            logging.getLogger(__name__).debug("TMDbService client not properly closed")

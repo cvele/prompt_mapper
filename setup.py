@@ -26,8 +26,6 @@ setup(
         "click>=8.0.0",
         "pydantic>=1.10.0",
         "python-dotenv>=0.19.0",
-        "aiohttp>=3.12.15",
-        "aiofiles>=22.0.0",
         "tenacity>=8.0.0",
         "openai>=1.0.0",
         "anthropic>=0.7.0",

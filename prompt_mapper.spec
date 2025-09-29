@@ -25,8 +25,6 @@ a = Analysis(
         'prompt_mapper.infrastructure',
         'prompt_mapper.utils',
         # Third-party dependencies that might not be auto-detected
-        'aiohttp',
-        'aiofiles',
         'click',
         'pydantic',
         'yaml',

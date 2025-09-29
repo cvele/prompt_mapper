@@ -2,17 +2,12 @@
 
 import asyncio
 import os
-import subprocess
-import time
 from pathlib import Path
-from typing import Any, Dict, Optional
-from unittest.mock import AsyncMock, Mock
 
-import aiohttp
 import pytest
 import yaml
 
-from prompt_mapper.config import Config, ConfigManager
+from prompt_mapper.config import ConfigManager
 from prompt_mapper.core.interfaces import ILLMService
 from prompt_mapper.core.models import LLMResponse
 from prompt_mapper.infrastructure import Container
@@ -75,22 +70,24 @@ def test_movies_path():
 @pytest.fixture(scope="session")
 async def radarr_service(radarr_url):
     """Wait for Radarr service to be ready."""
+    import httpx
+
     max_attempts = 30
     attempt = 0
 
-    while attempt < max_attempts:
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(f"{radarr_url}/ping", timeout=5) as response:
-                    if response.status == 200:
-                        print(f"✅ Radarr is ready at {radarr_url}")
-                        return radarr_url
-        except Exception:
-            pass
+    async with httpx.AsyncClient(timeout=5, verify=False) as client:
+        while attempt < max_attempts:
+            try:
+                response = await client.get(f"{radarr_url}/ping")
+                if response.status_code == 200:
+                    print(f"✅ Radarr is ready at {radarr_url}")
+                    return radarr_url
+            except Exception:
+                pass
 
-        attempt += 1
-        print(f"⏳ Waiting for Radarr... ({attempt}/{max_attempts})")
-        await asyncio.sleep(2)
+            attempt += 1
+            print(f"⏳ Waiting for Radarr... ({attempt}/{max_attempts})")
+            await asyncio.sleep(2)
 
     pytest.skip(f"Radarr not available at {radarr_url} after {max_attempts} attempts")
 
@@ -101,6 +98,9 @@ def _get_radarr_api_key():
     api_key = os.getenv("RADARR_API_KEY")
     if api_key:
         return api_key
+
+    # Fallback for integration tests
+    return "test-radarr-api-key"
 
 
 @pytest.fixture

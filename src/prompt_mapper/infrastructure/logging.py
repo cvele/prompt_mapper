@@ -48,7 +48,6 @@ def setup_logging(config: LoggingConfig) -> None:
     # Set third-party loggers to WARNING to reduce noise
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("requests").setLevel(logging.WARNING)
-    logging.getLogger("aiohttp").setLevel(logging.WARNING)
 
     logging.info(f"Logging configured with level {config.level}")
 

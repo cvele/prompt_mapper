@@ -3,8 +3,10 @@
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
+import httpx
+
 if TYPE_CHECKING:
-    import aiohttp
+    pass
 
 from ...config.models import Config
 from ...infrastructure.logging import LoggerMixin
@@ -25,7 +27,7 @@ class RadarrService(IRadarrService, LoggerMixin):
         """
         self._config = config
         self._radarr_config = config.radarr
-        self._session: Optional["aiohttp.ClientSession"] = None
+        self._client: Optional["httpx.AsyncClient"] = None
         # Using manual HTTP requests for better control
 
     async def get_movie_by_tmdb_id(self, tmdb_id: int) -> Optional[RadarrMovie]:
@@ -47,15 +49,15 @@ class RadarrService(IRadarrService, LoggerMixin):
             url = f"{self._radarr_config.url}/api/v3/movie"
             headers = {"X-Api-Key": self._radarr_config.api_key}
 
-            async with self._get_session().get(url, headers=headers) as response:
-                response.raise_for_status()
-                movies = await response.json()
+            response = await self._get_client().get(url, headers=headers)
+            response.raise_for_status()
+            movies = response.json()
 
-                for movie in movies:
-                    if movie.get("tmdbId") == tmdb_id:
-                        return RadarrMovie(movie)
+            for movie in movies:
+                if movie.get("tmdbId") == tmdb_id:
+                    return RadarrMovie(movie)
 
-                return None
+            return None
 
         except Exception as e:
             error_msg = f"Failed to get movie from Radarr by TMDb ID {tmdb_id}: {e}"
@@ -142,15 +144,15 @@ class RadarrService(IRadarrService, LoggerMixin):
             url = f"{self._radarr_config.url}/api/v3/movie"
             headers = {"X-Api-Key": self._radarr_config.api_key}
 
-            async with self._get_session().post(url, headers=headers, json=movie_data) as response:
-                if response.status == 400:
-                    error_text = await response.text()
-                    self.logger.error(f"Radarr 400 error details: {error_text}")
-                response.raise_for_status()
-                result = await response.json()
+            response = await self._get_client().post(url, headers=headers, json=movie_data)
+            if response.status_code == 400:
+                error_text = response.text
+                self.logger.error(f"Radarr 400 error details: {error_text}")
+            response.raise_for_status()
+            result = response.json()
 
-                self.logger.info(f"Added movie to Radarr: {movie_info.title} ({movie_info.year})")
-                return RadarrMovie(result)
+            self.logger.info(f"Added movie to Radarr: {movie_info.title} ({movie_info.year})")
+            return RadarrMovie(result)
 
         except Exception as e:
             error_msg = f"Failed to add movie to Radarr: {e}"
@@ -294,22 +296,20 @@ class RadarrService(IRadarrService, LoggerMixin):
                 "filterExistingFiles": True,
             }
 
-            async with self._get_session().get(url, headers=headers, params=params) as response:
-                response.raise_for_status()
-                candidates = await response.json()
+            response = await self._get_client().get(url, headers=headers, params=params)
+            response.raise_for_status()
+            candidates = response.json()
 
-                # Filter candidates to only include our source files
-                source_path_strs = {str(path) for path in source_paths}
-                filtered_candidates = [
-                    candidate
-                    for candidate in candidates
-                    if candidate.get("path") in source_path_strs
-                ]
+            # Filter candidates to only include our source files
+            source_path_strs = {str(path) for path in source_paths}
+            filtered_candidates = [
+                candidate for candidate in candidates if candidate.get("path") in source_path_strs
+            ]
 
-                self.logger.info(
-                    f"Found {len(filtered_candidates)} import candidates for {len(source_paths)} files"
-                )
-                return filtered_candidates
+            self.logger.info(
+                f"Found {len(filtered_candidates)} import candidates for {len(source_paths)} files"
+            )
+            return filtered_candidates
 
         except Exception as e:
             error_msg = f"Failed to get manual import candidates: {e}"
@@ -352,12 +352,12 @@ class RadarrService(IRadarrService, LoggerMixin):
             url = f"{self._radarr_config.url}/api/v3/manualimport"
             headers = {"X-Api-Key": self._radarr_config.api_key}
 
-            async with self._get_session().post(url, headers=headers, json=import_data) as response:
-                response.raise_for_status()
-                results = await response.json()
+            response = await self._get_client().post(url, headers=headers, json=import_data)
+            response.raise_for_status()
+            results: List[Dict[str, Any]] = response.json()
 
-                self.logger.info(f"Executed manual import for {len(import_data)} files")
-                return results
+            self.logger.info(f"Executed manual import for {len(import_data)} files")
+            return results
 
         except Exception as e:
             error_msg = f"Failed to execute manual import: {e}"
@@ -385,11 +385,9 @@ class RadarrService(IRadarrService, LoggerMixin):
 
             command_data = {"name": "MoviesSearch", "movieIds": [radarr_movie["id"]]}
 
-            async with self._get_session().post(
-                url, headers=headers, json=command_data
-            ) as response:
-                response.raise_for_status()
-                return True
+            response = await self._get_client().post(url, headers=headers, json=command_data)
+            response.raise_for_status()
+            return True
 
         except Exception as e:
             error_msg = f"Failed to trigger movie search: {e}"
@@ -418,9 +416,9 @@ class RadarrService(IRadarrService, LoggerMixin):
             headers = {"X-Api-Key": self._radarr_config.api_key}
             params = {"deleteFiles": str(delete_files).lower()}
 
-            async with self._get_session().delete(url, headers=headers, params=params) as response:
-                response.raise_for_status()
-                return True
+            response = await self._get_client().delete(url, headers=headers, params=params)
+            response.raise_for_status()
+            return True
 
         except Exception as e:
             error_msg = f"Failed to remove movie from Radarr: {e}"
@@ -443,12 +441,12 @@ class RadarrService(IRadarrService, LoggerMixin):
             url = f"{self._radarr_config.url}/api/v3/system/status"
             headers = {"X-Api-Key": self._radarr_config.api_key}
 
-            async with self._get_session().get(url, headers=headers) as response:
-                response.raise_for_status()
-                result = await response.json()
-                if not isinstance(result, dict):
-                    return {"error": "Invalid response format"}
-                return result
+            response = await self._get_client().get(url, headers=headers)
+            response.raise_for_status()
+            result = response.json()
+            if not isinstance(result, dict):
+                return {"error": "Invalid response format"}
+            return result
 
         except Exception as e:
             error_msg = f"Failed to get Radarr system status: {e}"
@@ -471,32 +469,25 @@ class RadarrService(IRadarrService, LoggerMixin):
         except Exception:
             return False
 
-    def _get_session(self) -> "aiohttp.ClientSession":
-        """Get or create HTTP session.
+    def _get_client(self) -> "httpx.AsyncClient":
+        """Get or create HTTP client.
 
         Returns:
-            HTTP session.
+            HTTP client.
         """
-        if self._session is None:
-            import aiohttp
-
-            timeout = aiohttp.ClientTimeout(total=self._radarr_config.timeout)
-            # Disable SSL verification and warnings
-            try:
-                import urllib3
-
-                urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-            except ImportError:
-                pass
-            connector = aiohttp.TCPConnector(ssl=False)
-            self._session = aiohttp.ClientSession(timeout=timeout, connector=connector)
-        return self._session
+        if self._client is None:
+            # Simple httpx client with SSL verification disabled
+            self._client = httpx.AsyncClient(
+                timeout=self._radarr_config.timeout,
+                verify=False,
+            )
+        return self._client
 
     async def close(self) -> None:
-        """Close HTTP session."""
-        if self._session:
-            await self._session.close()
-            self._session = None
+        """Close HTTP client."""
+        if self._client:
+            await self._client.aclose()
+            self._client = None
 
     async def __aenter__(self) -> "RadarrService":
         """Async context manager entry."""
@@ -538,7 +529,7 @@ class RadarrService(IRadarrService, LoggerMixin):
     def __del__(self) -> None:
         """Cleanup on deletion."""
         # Just log that cleanup is needed, don't try to clean up here
-        if self._session and not self._session.closed:
+        if self._client and not self._client.is_closed:
             import logging
 
-            logging.getLogger(__name__).debug("RadarrService session not properly closed")
+            logging.getLogger(__name__).debug("RadarrService client not properly closed")

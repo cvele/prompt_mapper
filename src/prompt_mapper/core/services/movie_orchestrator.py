@@ -102,14 +102,6 @@ class MovieOrchestrator(IMovieOrchestrator, LoggerMixin):
                 movie_count = len(scan_result.video_files)
                 self.logger.info(f"Found {movie_count} video files, processing each individually")
 
-                # Limit to reasonable batch size
-                max_batch = 20
-                if movie_count > max_batch:
-                    self.logger.warning(
-                        f"Large batch ({movie_count} files). Processing first {max_batch} only."
-                    )
-                    scan_result.video_files = scan_result.video_files[:max_batch]
-
                 # Process each video file as a separate movie
                 summary = SessionSummary()
                 for i, video_file in enumerate(scan_result.video_files):
