@@ -90,9 +90,19 @@ def test_movies_path():
     # If it's a relative path, make it relative to the project root
     if not os.path.isabs(movies_dir):
         project_root = Path(__file__).parent.parent.parent
-        return project_root / movies_dir
+        test_path = project_root / movies_dir
     else:
-        return Path(movies_dir)
+        test_path = Path(movies_dir)
+
+    # Debug logging for CI troubleshooting
+    print(f"🔍 Test movies path resolution:")
+    print(f"   MOVIES_DIR env var: {os.getenv('MOVIES_DIR')}")
+    print(f"   RUNNER_TEMP env var: {os.getenv('RUNNER_TEMP')}")
+    print(f"   Resolved movies_dir: {movies_dir}")
+    print(f"   Final test path: {test_path}")
+    print(f"   Path exists: {test_path.exists()}")
+
+    return test_path
 
 
 @pytest.fixture(scope="session")
