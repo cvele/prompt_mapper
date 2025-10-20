@@ -77,7 +77,22 @@ def radarr_url():
 @pytest.fixture(scope="session")
 def test_movies_path():
     """Path to test movies directory."""
-    return Path(__file__).parent.parent.parent / "test_movies"
+    # Use the same logic as create_test_movies.py to find the test movies directory
+    movies_dir = os.getenv("MOVIES_DIR")
+    if not movies_dir:
+        # In CI environments, use RUNNER_TEMP for guaranteed write access
+        runner_temp = os.getenv("RUNNER_TEMP")
+        if runner_temp:
+            movies_dir = os.path.join(runner_temp, "test_movies")
+        else:
+            movies_dir = "test_movies"
+
+    # If it's a relative path, make it relative to the project root
+    if not os.path.isabs(movies_dir):
+        project_root = Path(__file__).parent.parent.parent
+        return project_root / movies_dir
+    else:
+        return Path(movies_dir)
 
 
 @pytest.fixture(scope="session")
@@ -93,7 +108,7 @@ async def radarr_service(radarr_url):
             try:
                 response = await client.get(f"{radarr_url}/ping")
                 if response.status_code == 200:
-                    print(f"✅ Radarr is ready at {radarr_url}")
+                    print(f"Radarr is ready at {radarr_url}")
                     return radarr_url
             except Exception:
                 pass
