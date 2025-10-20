@@ -1,9 +1,12 @@
 """Movie-related data models."""
 
 from datetime import date
-from typing import Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    from .llm_response import LLMResponse
 
 
 class MovieInfo(BaseModel):
@@ -48,3 +51,4 @@ class MovieMatch(BaseModel):
     selected_automatically: bool = Field(..., description="Whether selection was automatic")
     user_confirmed: bool = Field(default=False, description="Whether user confirmed the match")
     rationale: Optional[str] = Field(None, description="Reasoning for the match")
+    llm_response: Optional["LLMResponse"] = Field(None, description="Original LLM response")

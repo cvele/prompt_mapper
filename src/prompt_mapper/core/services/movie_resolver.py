@@ -27,14 +27,14 @@ class MovieResolver(IMovieResolver, LoggerMixin):
         self._tmdb_service = tmdb_service
         self._interactive = config.app.interactive
 
-    async def resolve_movie(
-        self, scan_result: ScanResult, user_prompt: str, confidence_threshold: float = 0.8
+    async def resolve_movie_from_llm_response(
+        self, scan_result: ScanResult, llm_response: LLMResponse, confidence_threshold: float = 0.8
     ) -> MovieMatch:
-        """Resolve movie from scan result.
+        """Resolve movie from LLM response and scan result.
 
         Args:
             scan_result: File scan result.
-            user_prompt: User prompt for resolution guidance.
+            llm_response: LLM response with movie information.
             confidence_threshold: Minimum confidence for auto-selection.
 
         Returns:
@@ -44,10 +44,7 @@ class MovieResolver(IMovieResolver, LoggerMixin):
             MovieResolverError: If resolution fails.
         """
         try:
-            # Step 1: Get LLM resolution
-            llm_response = await self.resolve_with_llm(scan_result, user_prompt)
-
-            # Step 2: Search TMDb for candidates
+            # Step 1: Search TMDb for candidates
             candidates = await self._tmdb_service.search_movies(
                 llm_response, max_results=self._config.matching.max_search_results
             )
@@ -55,7 +52,7 @@ class MovieResolver(IMovieResolver, LoggerMixin):
             if not candidates:
                 raise MovieResolverError("No movie candidates found")
 
-            # Step 3: Determine if we can auto-select
+            # Step 2: Determine if we can auto-select
             top_candidate = candidates[0]
             combined_confidence = self._calculate_combined_confidence(
                 llm_response.confidence, top_candidate.match_score
@@ -73,7 +70,7 @@ class MovieResolver(IMovieResolver, LoggerMixin):
                 selected_candidate = top_candidate
                 self.logger.info(f"Auto-selected movie: {selected_candidate.movie_info.title}")
             else:
-                # Step 4: Get user choice
+                # Step 3: Get user choice
                 choice_index = await self.get_user_choice(scan_result, candidates, llm_response)
                 if choice_index is not None:
                     selected_candidate = candidates[choice_index]
@@ -87,6 +84,7 @@ class MovieResolver(IMovieResolver, LoggerMixin):
             movie_match = MovieMatch(
                 movie_info=selected_candidate.movie_info,
                 confidence=combined_confidence,
+                llm_response=llm_response,
                 candidates=candidates,
                 selected_automatically=auto_select,
                 user_confirmed=user_confirmed,
@@ -97,42 +95,6 @@ class MovieResolver(IMovieResolver, LoggerMixin):
 
         except Exception as e:
             error_msg = f"Movie resolution failed: {e}"
-            self.logger.error(error_msg)
-            raise MovieResolverError(error_msg) from e
-
-    async def resolve_with_llm(self, scan_result: ScanResult, user_prompt: str) -> LLMResponse:
-        """Get LLM resolution for scan result.
-
-        Args:
-            scan_result: File scan result.
-            user_prompt: User prompt for resolution guidance.
-
-        Returns:
-            LLM response with movie information.
-
-        Raises:
-            MovieResolverError: If LLM resolution fails.
-        """
-        try:
-            # Use video files for analysis
-            files_for_analysis = scan_result.video_files
-            if not files_for_analysis:
-                raise MovieResolverError("No video files found for analysis")
-
-            # Create context from scan result
-            context = f"Directory: {scan_result.root_path.name}"
-            if scan_result.has_multiple_videos:
-                context += f"; Multiple videos: {len(scan_result.video_files)} files"
-
-            # Get LLM response
-            llm_response = await self._llm_service.resolve_movie(
-                file_info=files_for_analysis, user_prompt=user_prompt, context=context
-            )
-
-            return llm_response
-
-        except Exception as e:
-            error_msg = f"LLM resolution failed: {e}"
             self.logger.error(error_msg)
             raise MovieResolverError(error_msg) from e
 

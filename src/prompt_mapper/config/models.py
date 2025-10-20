@@ -198,8 +198,12 @@ class AppConfig(BaseModel):
 
     dry_run: bool = Field(default=False, description="Run in dry-run mode")
     interactive: bool = Field(default=True, description="Enable interactive mode")
-    batch_size: int = Field(default=10, gt=0, description="Batch processing size")
-    parallel_workers: int = Field(default=3, gt=0, description="Number of parallel workers")
+    batch_size: int = Field(
+        default=5,
+        gt=0,
+        le=20,
+        description="Number of movies to process in a single LLM batch request",
+    )
     retry_attempts: int = Field(default=3, ge=0, description="Number of retry attempts")
     cache_enabled: bool = Field(default=True, description="Enable result caching")
     cache_ttl_hours: int = Field(default=24, gt=0, description="Cache TTL in hours")

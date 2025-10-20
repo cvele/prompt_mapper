@@ -10,14 +10,14 @@ class IMovieResolver(ABC):
     """Interface for movie resolution services."""
 
     @abstractmethod
-    async def resolve_movie(
-        self, scan_result: ScanResult, user_prompt: str, confidence_threshold: float = 0.8
+    async def resolve_movie_from_llm_response(
+        self, scan_result: ScanResult, llm_response: LLMResponse, confidence_threshold: float = 0.8
     ) -> MovieMatch:
-        """Resolve movie from scan result.
+        """Resolve movie from LLM response and scan result.
 
         Args:
             scan_result: File scan result.
-            user_prompt: User prompt for resolution guidance.
+            llm_response: LLM response with movie information.
             confidence_threshold: Minimum confidence for auto-selection.
 
         Returns:
@@ -25,22 +25,6 @@ class IMovieResolver(ABC):
 
         Raises:
             MovieResolverError: If resolution fails.
-        """
-        pass
-
-    @abstractmethod
-    async def resolve_with_llm(self, scan_result: ScanResult, user_prompt: str) -> LLMResponse:
-        """Get LLM resolution for scan result.
-
-        Args:
-            scan_result: File scan result.
-            user_prompt: User prompt for resolution guidance.
-
-        Returns:
-            LLM response with movie information.
-
-        Raises:
-            MovieResolverError: If LLM resolution fails.
         """
         pass
 

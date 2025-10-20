@@ -29,45 +29,44 @@ class BaseLLMService(ILLMService, LoggerMixin, ABC):
         self._config = config
         self._llm_config = config.llm
 
-    async def resolve_movie(
-        self, file_info: List[FileInfo], user_prompt: str, context: str = ""
-    ) -> LLMResponse:
-        """Resolve movie information from file information using LLM.
+    async def resolve_movies_batch(
+        self, movies_data: List[Dict[str, Any]], user_prompt: str
+    ) -> List[LLMResponse]:
+        """Resolve movie information for multiple movies in a single LLM request.
 
         Args:
-            file_info: List of file information objects.
+            movies_data: List of movie data dictionaries, each containing:
+                - file_info: List[FileInfo] - File information objects
+                - context: str - Additional context information
             user_prompt: User-provided prompt for resolution guidance.
-            context: Additional context information.
 
         Returns:
-            LLM response with movie resolution.
+            List of LLM responses with movie resolutions, one per input movie.
 
         Raises:
             LLMServiceError: If LLM request fails.
         """
         try:
-            # Prepare input data
-            input_data = self._prepare_input_data(file_info, context)
+            if not movies_data:
+                return []
 
-            # Create system prompt
-            system_prompt = self._create_system_prompt()
+            # Create system prompt for batch processing
+            system_prompt = self._create_batch_system_prompt()
 
-            # Create user prompt
-            full_user_prompt = self._create_user_prompt(input_data, user_prompt)
+            # Create user prompt with all movies
+            full_user_prompt = self._create_batch_user_prompt(movies_data, user_prompt)
 
             # Make LLM request
             response_text = await self._make_llm_request(system_prompt, full_user_prompt)
 
-            # Parse response
-            llm_response = self._parse_response(response_text)
+            # Parse batch response
+            llm_responses = self._parse_batch_response(response_text, len(movies_data))
 
-            self.logger.info(
-                f"LLM resolved movie: {llm_response.canonical_title} ({llm_response.year})"
-            )
-            return llm_response
+            self.logger.info(f"LLM resolved {len(llm_responses)} movies in batch")
+            return llm_responses
 
         except Exception as e:
-            error_msg = f"LLM resolution failed: {e}"
+            error_msg = f"LLM batch resolution failed: {e}"
             self.logger.error(error_msg)
             raise LLMServiceError(error_msg) from e
 
@@ -131,26 +130,29 @@ class BaseLLMService(ILLMService, LoggerMixin, ABC):
 
         return input_data
 
-    def _create_system_prompt(self) -> str:
-        """Create system prompt for LLM.
+    def _create_batch_system_prompt(self) -> str:
+        """Create system prompt for batch LLM processing.
 
         Returns:
-            System prompt text.
+            System prompt text for batch processing.
         """
-        return """You are a movie identification expert. Analyze the provided file information and extract canonical movie details.
+        return """You are a movie identification expert. Analyze the provided file information for multiple movies and extract canonical movie details for each.
 
-IMPORTANT: You must respond with valid JSON in exactly this format:
-{
-    "canonical_title": "string",
-    "year": integer_or_null,
-    "aka_titles": ["string_array"],
-    "language_hints": ["string_array"],
-    "confidence": float_between_0_and_1,
-    "rationale": "string",
-    "director": "string_or_null",
-    "genre_hints": ["string_array"],
-    "edition_notes": "string_or_null"
-}
+IMPORTANT: You must respond with valid JSON array containing movie objects in exactly this format:
+[
+    {
+        "canonical_title": "string",
+        "year": integer_or_null,
+        "aka_titles": ["string_array"],
+        "language_hints": ["string_array"],
+        "confidence": float_between_0_and_1,
+        "rationale": "string",
+        "director": "string_or_null",
+        "genre_hints": ["string_array"],
+        "edition_notes": "string_or_null"
+    },
+    ...
+]
 
 Rules:
 - canonical_title: The most widely recognized English title
@@ -163,6 +165,7 @@ Rules:
 - genre_hints: Likely genres based on title/context
 - edition_notes: Special edition info (Director's Cut, Extended, etc.)
 
+The response array must contain exactly the same number of movie objects as provided in the input, in the same order.
 Focus on accuracy over speed. If uncertain, lower the confidence score."""
 
     def _create_user_prompt(self, input_data: Dict[str, Any], user_prompt: str) -> str:
@@ -211,6 +214,67 @@ Focus on accuracy over speed. If uncertain, lower the confidence score."""
 
         return "\n".join(prompt_parts)
 
+    def _create_batch_user_prompt(self, movies_data: List[Dict[str, Any]], user_prompt: str) -> str:
+        """Create batch user prompt with multiple movies data.
+
+        Args:
+            movies_data: List of movie data dictionaries.
+            user_prompt: User-provided prompt.
+
+        Returns:
+            Complete batch user prompt.
+        """
+        prompt_parts = []
+
+        # Add user guidance
+        if user_prompt:
+            prompt_parts.append(f"User guidance: {user_prompt}")
+            prompt_parts.append("")
+
+        # Add movies information
+        prompt_parts.append(f"Process these {len(movies_data)} movies:")
+        prompt_parts.append("")
+
+        for i, movie_data in enumerate(movies_data, 1):
+            file_info = movie_data["file_info"]
+            context = movie_data.get("context", "")
+
+            # Prepare input data for this movie
+            input_data = self._prepare_input_data(file_info, context)
+
+            prompt_parts.append(f"Movie {i}:")
+
+            # Add context if provided
+            if input_data.get("context"):
+                prompt_parts.append(f"  Context: {input_data['context']}")
+
+            # Add file information
+            prompt_parts.append("  Files:")
+            for file_data in input_data["files"]:
+                file_desc = f"    - {file_data['name']}"
+                if file_data["is_main"]:
+                    file_desc += " (main file)"
+                file_desc += f" [{file_data['size_mb']}MB]"
+
+                if file_data["directory"] != file_data["name"]:
+                    file_desc += f" in folder: {file_data['directory']}"
+
+                if file_data["extracted_year"]:
+                    file_desc += f" (extracted year: {file_data['extracted_year']})"
+
+                if file_data["language_hints"]:
+                    file_desc += f" (languages: {', '.join(file_data['language_hints'])})"
+
+                prompt_parts.append(file_desc)
+
+            prompt_parts.append("")
+
+        prompt_parts.append(
+            "Please identify each movie and respond with a JSON array containing movie objects in the required format, maintaining the same order as the input."
+        )
+
+        return "\n".join(prompt_parts)
+
     def _parse_response(self, response_text: str) -> LLMResponse:
         """Parse LLM response into structured format.
 
@@ -249,6 +313,62 @@ Focus on accuracy over speed. If uncertain, lower the confidence score."""
 
         except (json.JSONDecodeError, KeyError, TypeError) as e:
             raise LLMServiceError(f"Failed to parse LLM response: {e}")
+
+    def _parse_batch_response(self, response_text: str, expected_count: int) -> List[LLMResponse]:
+        """Parse batch LLM response into structured format.
+
+        Args:
+            response_text: Raw LLM response containing JSON array.
+            expected_count: Expected number of movie responses.
+
+        Returns:
+            List of parsed LLM responses.
+
+        Raises:
+            LLMServiceError: If parsing fails.
+        """
+        try:
+            # Extract JSON array from response (in case there's extra text)
+            json_match = re.search(r"\[.*\]", response_text, re.DOTALL)
+            if json_match:
+                json_text = json_match.group(0)
+            else:
+                json_text = response_text
+
+            # Parse JSON array
+            data_array = json.loads(json_text)
+
+            if not isinstance(data_array, list):
+                raise LLMServiceError("Expected JSON array in batch response")
+
+            if len(data_array) != expected_count:
+                raise LLMServiceError(
+                    f"Expected {expected_count} movies in response, got {len(data_array)}"
+                )
+
+            # Create LLMResponse objects with validation
+            responses = []
+            for i, data in enumerate(data_array):
+                try:
+                    response = LLMResponse(
+                        canonical_title=data["canonical_title"],
+                        year=data.get("year"),
+                        aka_titles=data.get("aka_titles", []),
+                        language_hints=data.get("language_hints", []),
+                        confidence=data["confidence"],
+                        rationale=data["rationale"],
+                        director=data.get("director"),
+                        genre_hints=data.get("genre_hints", []),
+                        edition_notes=data.get("edition_notes"),
+                    )
+                    responses.append(response)
+                except (KeyError, TypeError) as e:
+                    raise LLMServiceError(f"Failed to parse movie {i+1} in batch response: {e}")
+
+            return responses
+
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            raise LLMServiceError(f"Failed to parse batch LLM response: {e}")
 
 
 class OpenAILLMService(BaseLLMService):

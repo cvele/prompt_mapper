@@ -24,26 +24,39 @@ class MockLLMService:
         """Add a mock response for a filename pattern."""
         self.responses[filename_pattern] = response
 
-    async def resolve_movie(self, file_info, user_prompt, context=""):
-        """Mock movie resolution."""
+    async def resolve_movies_batch(self, movies_data, user_prompt):
+        """Mock batch movie resolution."""
         self._call_count += 1
+        responses = []
 
-        # Get the main file name
-        main_file = max(file_info, key=lambda f: f.size_bytes)
-        filename = main_file.name.lower()
+        for movie_data in movies_data:
+            file_info = movie_data["file_info"]
 
-        # Find matching response
-        for pattern, response in self.responses.items():
-            if pattern.lower() in filename:
-                return response
+            # Get the main file name
+            main_file = max(file_info, key=lambda f: f.size_bytes)
+            filename = main_file.name.lower()
 
-        # Default response for unknown files
-        return LLMResponse(
-            canonical_title="Unknown Movie",
-            year=2000,
-            confidence=0.5,
-            rationale="Mock response for testing",
-        )
+            # Find matching response
+            found_response = None
+            for pattern, response in self.responses.items():
+                if pattern.lower() in filename:
+                    found_response = response
+                    break
+
+            # Use found response or default
+            if found_response:
+                responses.append(found_response)
+            else:
+                responses.append(
+                    LLMResponse(
+                        canonical_title="Unknown Movie",
+                        year=2000,
+                        confidence=0.5,
+                        rationale="Mock response for testing",
+                    )
+                )
+
+        return responses
 
     def validate_response(self, response: str) -> bool:
         return True
@@ -172,7 +185,6 @@ def integration_config(tmp_path, radarr_url):
             "dry_run": False,
             "interactive": False,
             "batch_size": 5,
-            "parallel_workers": 2,
             "retry_attempts": 3,
             "cache_enabled": False,
         },

@@ -44,9 +44,8 @@ class IMovieOrchestrator(ABC):
         dry_run: bool = False,
         auto_add: bool = False,
         auto_import: bool = False,
-        max_parallel: int = 3,
     ) -> SessionSummary:
-        """Process multiple movie directories in batch.
+        """Process multiple movie directories in batch using LLM batching.
 
         Args:
             paths: List of paths to movie directories.
@@ -54,7 +53,6 @@ class IMovieOrchestrator(ABC):
             dry_run: If True, don't make actual changes.
             auto_add: Automatically add to Radarr without confirmation.
             auto_import: Automatically import files without confirmation.
-            max_parallel: Maximum number of parallel operations.
 
         Returns:
             Session summary with all results.

@@ -73,7 +73,6 @@ def cli(ctx: click.Context, config: Optional[Path], verbose: bool, dry_run: bool
 @click.option("--batch", is_flag=True, help="Process multiple directories")
 @click.option("--auto-add", is_flag=True, help="Automatically add movies to Radarr")
 @click.option("--auto-import", is_flag=True, help="Automatically import files")
-@click.option("--max-parallel", default=3, help="Maximum parallel operations")
 @click.pass_context
 def scan(
     ctx: click.Context,
@@ -83,7 +82,6 @@ def scan(
     batch: bool,
     auto_add: bool,
     auto_import: bool,
-    max_parallel: int,
 ) -> None:
     """Scan directories for movies and process them."""
     config = ctx.obj["config"]
@@ -112,7 +110,6 @@ def scan(
                 user_prompt=user_prompt,
                 batch=batch,
                 dry_run=ctx.obj["dry_run"],
-                max_parallel=max_parallel,
             )
         )
     except KeyboardInterrupt:
@@ -131,7 +128,7 @@ def validate(ctx: click.Context) -> None:
 
     try:
         asyncio.run(_validate_setup(container))
-        click.echo("✓ All prerequisites validated successfully")
+        click.echo("All prerequisites validated successfully")
     except Exception as e:
         click.echo(f"Validation failed: {e}", err=True)
         sys.exit(1)
@@ -195,7 +192,6 @@ async def _run_scan(
     user_prompt: str,
     batch: bool,
     dry_run: bool,
-    max_parallel: int,
 ) -> None:
     """Run the scanning process."""
     from ..core.interfaces import IMovieOrchestrator, IRadarrService, ITMDbService
@@ -222,7 +218,7 @@ async def _run_scan(
             # Batch processing
             click.echo(f"Processing {len(paths)} directories...")
             summary = await orchestrator.process_batch(
-                paths=paths, user_prompt=user_prompt, dry_run=dry_run, max_parallel=max_parallel
+                paths=paths, user_prompt=user_prompt, dry_run=dry_run
             )
             _display_summary(summary)
 

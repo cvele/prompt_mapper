@@ -1,15 +1,15 @@
 """Movie orchestrator service implementation."""
 
-import asyncio
 import time
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from ...config.models import Config
 from ...infrastructure.logging import LoggerMixin
 from ...utils import OrchestratorError
 from ..interfaces import (
     IFileScanner,
+    ILLMService,
     IMovieOrchestrator,
     IMovieResolver,
     IRadarrService,
@@ -18,6 +18,7 @@ from ..interfaces import (
 from ..interfaces.radarr_service import RadarrMovie
 from ..models import ProcessingResult, SessionSummary
 from ..models.file_info import ScanResult
+from ..models.llm_response import LLMResponse
 from ..models.movie import MovieMatch
 from ..models.processing_result import ProcessingStatus, RadarrAction
 
@@ -32,6 +33,7 @@ class MovieOrchestrator(IMovieOrchestrator, LoggerMixin):
         movie_resolver: IMovieResolver,
         radarr_service: IRadarrService,
         tmdb_service: ITMDbService,
+        llm_service: ILLMService,
     ):
         """Initialize movie orchestrator.
 
@@ -41,12 +43,14 @@ class MovieOrchestrator(IMovieOrchestrator, LoggerMixin):
             movie_resolver: Movie resolver service.
             radarr_service: Radarr service.
             tmdb_service: TMDb service.
+            llm_service: LLM service.
         """
         self._config = config
         self._file_scanner = file_scanner
         self._movie_resolver = movie_resolver
         self._radarr_service = radarr_service
         self._tmdb_service = tmdb_service
+        self._llm_service = llm_service
         self._interactive = config.app.interactive
 
     async def process_single_movie(
@@ -119,13 +123,73 @@ class MovieOrchestrator(IMovieOrchestrator, LoggerMixin):
                         scan_depth=1,
                     )
 
-                    # Process this single video directly through movie resolver
+                    # Process this single video using LLM batch (with single item)
                     try:
-                        movie_match = await self._movie_resolver.resolve_movie(
-                            scan_result=single_scan,
-                            user_prompt=user_prompt,
-                            confidence_threshold=self._config.matching.confidence_threshold,
-                        )
+                        if dry_run:
+                            # In dry-run mode, create a mock movie match
+                            from ..models.movie import MovieInfo, MovieMatch
+
+                            mock_llm_response = LLMResponse(
+                                canonical_title=f"Mock Movie ({video_file.name})",
+                                year=2023,
+                                confidence=0.8,
+                                rationale="Dry-run mode - mock response",
+                                director=None,
+                                edition_notes=None,
+                            )
+
+                            mock_movie_info = MovieInfo(
+                                title=f"Mock Movie ({video_file.name})",
+                                year=2023,
+                                tmdb_id=12345,
+                                imdb_id=None,
+                                overview=None,
+                                poster_path=None,
+                                backdrop_path=None,
+                                original_title=None,
+                                original_language=None,
+                                release_date=None,
+                                runtime=None,
+                                popularity=None,
+                                vote_average=None,
+                                vote_count=None,
+                            )
+
+                            movie_match = MovieMatch(
+                                movie_info=mock_movie_info,
+                                confidence=0.8,
+                                llm_response=mock_llm_response,
+                                candidates=[],
+                                selected_automatically=True,
+                                user_confirmed=False,
+                                rationale="Dry-run mode - mock match",
+                            )
+                        else:
+                            # Create context from scan result
+                            context = f"Directory: {single_scan.root_path.name}"
+
+                            # Use LLM batch processing with single movie
+                            movies_data = [
+                                {"file_info": single_scan.video_files, "context": context}
+                            ]
+
+                            llm_responses = await self._llm_service.resolve_movies_batch(
+                                movies_data, user_prompt
+                            )
+
+                            if not llm_responses:
+                                raise Exception("No LLM response received")
+
+                            llm_response = llm_responses[0]
+
+                            # Resolve movie from LLM response
+                            movie_match = (
+                                await self._movie_resolver.resolve_movie_from_llm_response(
+                                    scan_result=single_scan,
+                                    llm_response=llm_response,
+                                    confidence_threshold=self._config.matching.confidence_threshold,
+                                )
+                            )
 
                         single_result = ProcessingResult(
                             source_path=video_file.path,
@@ -159,12 +223,72 @@ class MovieOrchestrator(IMovieOrchestrator, LoggerMixin):
                 result.error_message = f"Processed {summary.total_processed} movies: {summary.successful} successful, {summary.failed} failed"
                 return result
 
-            # Single video file - process normally
-            movie_match = await self._movie_resolver.resolve_movie(
-                scan_result=scan_result,
-                user_prompt=user_prompt,
-                confidence_threshold=self._config.matching.confidence_threshold,
-            )
+            # Single video file - process using LLM batch (with single item)
+            if dry_run:
+                # In dry-run mode, create a mock movie match
+                from ..models.movie import MovieInfo, MovieMatch
+
+                mock_llm_response = LLMResponse(
+                    canonical_title=f"Mock Movie ({scan_result.root_path.name})",
+                    year=2023,
+                    confidence=0.8,
+                    rationale="Dry-run mode - mock response",
+                    director=None,
+                    edition_notes=None,
+                )
+
+                mock_movie_info = MovieInfo(
+                    title=f"Mock Movie ({scan_result.root_path.name})",
+                    year=2023,
+                    tmdb_id=12345,
+                    imdb_id=None,
+                    overview=None,
+                    poster_path=None,
+                    backdrop_path=None,
+                    original_title=None,
+                    original_language=None,
+                    release_date=None,
+                    runtime=None,
+                    popularity=None,
+                    vote_average=None,
+                    vote_count=None,
+                )
+
+                movie_match = MovieMatch(
+                    movie_info=mock_movie_info,
+                    confidence=0.8,
+                    llm_response=mock_llm_response,
+                    candidates=[],
+                    selected_automatically=True,
+                    user_confirmed=False,
+                    rationale="Dry-run mode - mock match",
+                )
+            else:
+                # Create context from scan result
+                context = f"Directory: {scan_result.root_path.name}"
+                if scan_result.has_multiple_videos:
+                    context += f"; Multiple videos: {len(scan_result.video_files)} files"
+
+                # Use LLM batch processing with single movie
+                movies_data = [{"file_info": scan_result.video_files, "context": context}]
+
+                llm_responses = await self._llm_service.resolve_movies_batch(
+                    movies_data, user_prompt
+                )
+
+                if not llm_responses:
+                    result.error_message = "No LLM response received"
+                    result.status = ProcessingStatus.FAILED
+                    return result
+
+                llm_response = llm_responses[0]
+
+                # Resolve movie from LLM response
+                movie_match = await self._movie_resolver.resolve_movie_from_llm_response(
+                    scan_result=scan_result,
+                    llm_response=llm_response,
+                    confidence_threshold=self._config.matching.confidence_threshold,
+                )
             result.movie_match = movie_match
 
             if not movie_match.movie_info.tmdb_id:
@@ -193,10 +317,9 @@ class MovieOrchestrator(IMovieOrchestrator, LoggerMixin):
                     import_mode = self._config.radarr.import_config.mode
                     video_paths = [f.path for f in scan_result.video_files]
 
-                    import_results = await self._radarr_service.import_movie_files(
+                    await self._radarr_service.import_movie_files(
                         radarr_movie=radarr_movie, source_paths=video_paths, import_mode=import_mode
                     )
-                    result.import_results = import_results
 
             # Generate URLs for reference
             if movie_match.movie_info.tmdb_id:
@@ -227,9 +350,8 @@ class MovieOrchestrator(IMovieOrchestrator, LoggerMixin):
         dry_run: bool = False,
         auto_add: bool = False,
         auto_import: bool = False,
-        max_parallel: int = 3,
     ) -> SessionSummary:
-        """Process multiple movie directories in batch.
+        """Process multiple movie directories in batch using LLM batching.
 
         Args:
             paths: List of paths to movie directories.
@@ -237,7 +359,6 @@ class MovieOrchestrator(IMovieOrchestrator, LoggerMixin):
             dry_run: If True, don't make actual changes.
             auto_add: Automatically add to Radarr without confirmation.
             auto_import: Automatically import files without confirmation.
-            max_parallel: Maximum number of parallel operations.
 
         Returns:
             Session summary with all results.
@@ -251,42 +372,50 @@ class MovieOrchestrator(IMovieOrchestrator, LoggerMixin):
         try:
             self.logger.info(f"Starting batch processing of {len(paths)} directories")
 
-            # Process in batches to limit parallel operations
-            semaphore = asyncio.Semaphore(max_parallel)
-
-            async def process_with_semaphore(path: Path) -> ProcessingResult:
-                async with semaphore:
-                    return await self.process_single_movie(
-                        path=path,
-                        user_prompt=user_prompt,
-                        dry_run=dry_run,
-                        auto_add=auto_add,
-                        auto_import=auto_import,
-                    )
-
-            # Execute all processing tasks
-            tasks = [process_with_semaphore(path) for path in paths]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-
-            # Process results
-            for i, result in enumerate(results):
-                if isinstance(result, Exception):
-                    # Create error result
+            # Scan all directories first
+            scan_results = []
+            for path in paths:
+                try:
+                    scan_result = await self._file_scanner.scan_directory(path)
+                    if scan_result.video_files:
+                        scan_results.append((path, scan_result))
+                    else:
+                        # Create skipped result for directories with no video files
+                        skipped_result = ProcessingResult(
+                            source_path=path,
+                            status=ProcessingStatus.SKIPPED,
+                            scan_result=scan_result,
+                            movie_match=None,
+                            radarr_action=None,
+                            error_message="No video files found",
+                            processing_time_seconds=0.0,
+                            tmdb_url=None,
+                            radarr_url=None,
+                        )
+                        summary.add_result(skipped_result)
+                except Exception as e:
+                    # Create error result for scan failures
                     error_result = ProcessingResult(
-                        source_path=paths[i],
+                        source_path=path,
                         status=ProcessingStatus.FAILED,
                         scan_result=None,
                         movie_match=None,
                         radarr_action=None,
-                        error_message=str(result),
-                        processing_time_seconds=None,
+                        error_message=f"Scan failed: {e}",
+                        processing_time_seconds=0.0,
                         tmdb_url=None,
                         radarr_url=None,
                     )
                     summary.add_result(error_result)
-                else:
-                    # result is guaranteed to be ProcessingResult here
-                    assert isinstance(result, ProcessingResult)
+
+            # Process movies in batches using LLM batching
+            batch_size = self._config.app.batch_size
+            for i in range(0, len(scan_results), batch_size):
+                batch_scan_results = scan_results[i : i + batch_size]
+                batch_results = await self._process_movie_batch(
+                    batch_scan_results, user_prompt, dry_run, auto_add, auto_import
+                )
+                for result in batch_results:
                     summary.add_result(result)
 
             summary.total_processing_time_seconds = time.time() - session_start_time
@@ -446,3 +575,241 @@ class MovieOrchestrator(IMovieOrchestrator, LoggerMixin):
         from difflib import SequenceMatcher
 
         return SequenceMatcher(None, name1, name2).ratio()
+
+    async def _process_movie_batch(
+        self,
+        batch_scan_results: List[tuple[Path, ScanResult]],
+        user_prompt: str,
+        dry_run: bool,
+        auto_add: bool,
+        auto_import: bool,
+    ) -> List[ProcessingResult]:
+        """Process a batch of movies using LLM batching.
+
+        Args:
+            batch_scan_results: List of (path, scan_result) tuples.
+            user_prompt: User prompt for resolution guidance.
+            dry_run: If True, don't make actual changes.
+            auto_add: Automatically add to Radarr without confirmation.
+            auto_import: Automatically import files without confirmation.
+
+        Returns:
+            List of processing results.
+        """
+        if not batch_scan_results:
+            return []
+
+        batch_start_time = time.time()
+        results = []
+
+        try:
+            # Prepare movies data for LLM batch processing
+            movies_data: List[Optional[Dict[str, Any]]] = []
+            for path, scan_result in batch_scan_results:
+                # Handle multiple video files by processing the main one
+                main_video = scan_result.main_video_file
+                if main_video:
+                    # Create context from scan result
+                    context = f"Directory: {scan_result.root_path.name}"
+                    if scan_result.has_multiple_videos:
+                        context += f"; Multiple videos: {len(scan_result.video_files)} files"
+
+                    movies_data.append({"file_info": scan_result.video_files, "context": context})
+                else:
+                    # Skip if no main video file
+                    movies_data.append(None)
+
+            # Filter out None entries and keep track of indices
+            valid_movies_data = []
+            valid_indices = []
+            for i, movie_data in enumerate(movies_data):
+                if movie_data is not None:
+                    valid_movies_data.append(movie_data)
+                    valid_indices.append(i)
+
+            # Process valid movies with LLM batch
+            llm_responses: List[LLMResponse] = []
+            if valid_movies_data:
+                if dry_run:
+                    # In dry-run mode, create mock responses
+
+                    llm_responses = []
+                    for i, movie_data in enumerate(valid_movies_data):
+                        mock_response = LLMResponse(
+                            canonical_title=f"Mock Movie {i+1}",
+                            year=2023,
+                            confidence=0.8,
+                            rationale="Dry-run mode - mock response",
+                            director=None,
+                            edition_notes=None,
+                        )
+                        llm_responses.append(mock_response)
+                else:
+                    try:
+                        llm_responses = await self._llm_service.resolve_movies_batch(
+                            valid_movies_data, user_prompt
+                        )
+                    except Exception as e:
+                        self.logger.error(f"LLM batch processing failed: {e}")
+                        # Create error results for all movies in this batch
+                        for path, scan_result in batch_scan_results:
+                            error_result = ProcessingResult(
+                                source_path=path,
+                                status=ProcessingStatus.FAILED,
+                                scan_result=scan_result,
+                                movie_match=None,
+                                radarr_action=None,
+                                error_message=f"LLM batch processing failed: {e}",
+                                processing_time_seconds=time.time() - batch_start_time,
+                                tmdb_url=None,
+                                radarr_url=None,
+                            )
+                            results.append(error_result)
+                        return results
+
+            # Process each movie result
+            llm_response_index = 0
+            for i, (path, scan_result) in enumerate(batch_scan_results):
+                movie_start_time = time.time()
+
+                if i not in valid_indices:
+                    # Create skipped result for movies without valid video files
+                    result = ProcessingResult(
+                        source_path=path,
+                        status=ProcessingStatus.SKIPPED,
+                        scan_result=scan_result,
+                        movie_match=None,
+                        radarr_action=None,
+                        error_message="No valid video files found",
+                        processing_time_seconds=time.time() - movie_start_time,
+                        tmdb_url=None,
+                        radarr_url=None,
+                    )
+                    results.append(result)
+                    continue
+
+                # Get the LLM response for this movie
+                llm_response = llm_responses[llm_response_index]
+                llm_response_index += 1
+
+                try:
+                    if dry_run:
+                        # In dry-run mode, create a mock movie match
+                        from ..models.movie import MovieInfo, MovieMatch
+
+                        mock_movie_info = MovieInfo(
+                            title=llm_response.canonical_title,
+                            year=llm_response.year,
+                            tmdb_id=12345,
+                            imdb_id=None,
+                            overview=None,
+                            poster_path=None,
+                            backdrop_path=None,
+                            original_title=None,
+                            original_language=None,
+                            release_date=None,
+                            runtime=None,
+                            popularity=None,
+                            vote_average=None,
+                            vote_count=None,
+                        )
+
+                        movie_match = MovieMatch(
+                            movie_info=mock_movie_info,
+                            confidence=llm_response.confidence,
+                            llm_response=llm_response,
+                            candidates=[],
+                            selected_automatically=True,
+                            user_confirmed=False,
+                            rationale="Dry-run mode - mock match",
+                        )
+                    else:
+                        # Resolve movie from LLM response using movie resolver
+                        movie_match = await self._movie_resolver.resolve_movie_from_llm_response(
+                            scan_result=scan_result,
+                            llm_response=llm_response,
+                            confidence_threshold=self._config.matching.confidence_threshold,
+                        )
+
+                    # Handle Radarr integration and file import
+                    radarr_action = None
+                    if (
+                        self._config.radarr.enabled
+                        and not dry_run
+                        and movie_match.movie_info.tmdb_id
+                    ):
+                        # Get full movie details from TMDb
+                        full_movie_info = await self._tmdb_service.get_movie_details(
+                            movie_match.movie_info.tmdb_id
+                        )
+                        if full_movie_info:
+                            movie_match.movie_info = full_movie_info
+
+                        radarr_action, radarr_movie = await self._handle_radarr_integration(
+                            movie_match, auto_add
+                        )
+
+                        # Import files if requested
+                        if radarr_movie and (auto_import or self._config.matching.auto_import):
+                            import_mode = self._config.radarr.import_config.mode
+                            video_paths = [f.path for f in scan_result.video_files]
+
+                            await self._radarr_service.import_movie_files(
+                                radarr_movie=radarr_movie,
+                                source_paths=video_paths,
+                                import_mode=import_mode,
+                            )
+
+                    # Generate URLs for reference
+                    tmdb_url = None
+                    if movie_match.movie_info.tmdb_id:
+                        tmdb_url = (
+                            f"https://www.themoviedb.org/movie/{movie_match.movie_info.tmdb_id}"
+                        )
+
+                    result = ProcessingResult(
+                        source_path=path,
+                        status=ProcessingStatus.SUCCESS,
+                        scan_result=scan_result,
+                        movie_match=movie_match,
+                        radarr_action=radarr_action,
+                        error_message=None,
+                        processing_time_seconds=time.time() - movie_start_time,
+                        tmdb_url=tmdb_url,
+                        radarr_url=None,
+                    )
+                    results.append(result)
+
+                except Exception as e:
+                    error_result = ProcessingResult(
+                        source_path=path,
+                        status=ProcessingStatus.FAILED,
+                        scan_result=scan_result,
+                        movie_match=None,
+                        radarr_action=None,
+                        error_message=str(e),
+                        processing_time_seconds=time.time() - movie_start_time,
+                        tmdb_url=None,
+                        radarr_url=None,
+                    )
+                    results.append(error_result)
+
+            return results
+
+        except Exception as e:
+            self.logger.error(f"Batch processing failed: {e}")
+            # Create error results for all movies in this batch
+            for path, scan_result in batch_scan_results:
+                error_result = ProcessingResult(
+                    source_path=path,
+                    status=ProcessingStatus.FAILED,
+                    scan_result=scan_result,
+                    movie_match=None,
+                    radarr_action=None,
+                    error_message=f"Batch processing failed: {e}",
+                    processing_time_seconds=time.time() - batch_start_time,
+                    tmdb_url=None,
+                    radarr_url=None,
+                )
+                results.append(error_result)
+            return results

@@ -1,27 +1,28 @@
 """LLM service interface."""
 
 from abc import ABC, abstractmethod
-from typing import List
+from typing import Any, Dict, List
 
-from ..models import FileInfo, LLMResponse
+from ..models import LLMResponse
 
 
 class ILLMService(ABC):
     """Interface for LLM services."""
 
     @abstractmethod
-    async def resolve_movie(
-        self, file_info: List[FileInfo], user_prompt: str, context: str = ""
-    ) -> LLMResponse:
-        """Resolve movie information from file information using LLM.
+    async def resolve_movies_batch(
+        self, movies_data: List[Dict[str, Any]], user_prompt: str
+    ) -> List[LLMResponse]:
+        """Resolve movie information for multiple movies in a single LLM request.
 
         Args:
-            file_info: List of file information objects.
+            movies_data: List of movie data dictionaries, each containing:
+                - file_info: List[FileInfo] - File information objects
+                - context: str - Additional context information
             user_prompt: User-provided prompt for resolution guidance.
-            context: Additional context information.
 
         Returns:
-            LLM response with movie resolution.
+            List of LLM responses with movie resolutions, one per input movie.
 
         Raises:
             LLMServiceError: If LLM request fails.
