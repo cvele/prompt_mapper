@@ -292,7 +292,6 @@ class RadarrService(IRadarrService, LoggerMixin):
             params = {
                 "folder": folder_path,
                 "downloadId": "",  # Empty for manual import
-                "movieId": radarr_movie["id"],
                 "filterExistingFiles": True,
             }
 
@@ -300,10 +299,14 @@ class RadarrService(IRadarrService, LoggerMixin):
             response.raise_for_status()
             candidates = response.json()
 
-            # Filter candidates to only include our source files
+            # Filter candidates to match our specific movie and source files
             source_path_strs = {str(path) for path in source_paths}
+            movie_id = radarr_movie["id"]
             filtered_candidates = [
-                candidate for candidate in candidates if candidate.get("path") in source_path_strs
+                candidate
+                for candidate in candidates
+                if candidate.get("path") in source_path_strs
+                and candidate.get("movie", {}).get("id") == movie_id
             ]
 
             self.logger.info(
