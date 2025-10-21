@@ -150,10 +150,10 @@ async def test_radarr_service_initialization(integration_container, radarr_servi
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_successful_import_with_mock_api(
-    integration_container, test_movie_file, radarr_movie_data, mock_radarr_api
+    radarr_integration_container, test_movie_file, radarr_movie_data, mock_radarr_api
 ):
     """Test successful movie import using mocked Radarr API."""
-    radarr = integration_container.get(IRadarrService)
+    radarr = radarr_integration_container.get(IRadarrService)
 
     # Set up mock data
     mock_radarr_api.add_movie(radarr_movie_data)
@@ -215,10 +215,10 @@ async def test_successful_import_with_mock_api(
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_import_rejection_handling(
-    integration_container, test_movie_file, radarr_movie_data, mock_radarr_api
+    radarr_integration_container, test_movie_file, radarr_movie_data, mock_radarr_api
 ):
     """Test handling of import rejections from Radarr."""
-    radarr = integration_container.get(IRadarrService)
+    radarr = radarr_integration_container.get(IRadarrService)
 
     # Set up mock data with rejection
     mock_radarr_api.add_movie(radarr_movie_data)
@@ -281,10 +281,10 @@ async def test_import_rejection_handling(
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_batch_import_mixed_results(
-    integration_container, test_movie_files, radarr_movie_data, mock_radarr_api
+    radarr_integration_container, test_movie_files, radarr_movie_data, mock_radarr_api
 ):
     """Test batch import with mixed success/failure results."""
-    radarr = integration_container.get(IRadarrService)
+    radarr = radarr_integration_container.get(IRadarrService)
 
     # Set up mock data
     mock_radarr_api.add_movie(radarr_movie_data)
@@ -371,10 +371,10 @@ async def test_batch_import_mixed_results(
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_no_import_candidates_found(
-    integration_container, test_movie_file, radarr_movie_data, mock_radarr_api
+    radarr_integration_container, test_movie_file, radarr_movie_data, mock_radarr_api
 ):
     """Test handling when Radarr finds no import candidates."""
-    radarr = integration_container.get(IRadarrService)
+    radarr = radarr_integration_container.get(IRadarrService)
 
     # Set up mock data with no candidates
     mock_radarr_api.add_movie(radarr_movie_data)
@@ -406,9 +406,11 @@ async def test_no_import_candidates_found(
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_radarr_api_error_handling(integration_container, test_movie_file, radarr_movie_data):
+async def test_radarr_api_error_handling(
+    radarr_integration_container, test_movie_file, radarr_movie_data
+):
     """Test handling of Radarr API errors."""
-    radarr = integration_container.get(IRadarrService)
+    radarr = radarr_integration_container.get(IRadarrService)
 
     # Mock the HTTP client to raise an error
     with patch.object(radarr, "_get_client") as mock_client:
@@ -432,9 +434,11 @@ async def test_radarr_api_error_handling(integration_container, test_movie_file,
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_radarr_disabled_import(integration_container, test_movie_file, radarr_movie_data):
+async def test_radarr_disabled_import(
+    radarr_integration_container, test_movie_file, radarr_movie_data
+):
     """Test import when Radarr is disabled in configuration."""
-    radarr = integration_container.get(IRadarrService)
+    radarr = radarr_integration_container.get(IRadarrService)
 
     # Mock Radarr as disabled
     with patch.object(radarr, "_radarr_config") as mock_config:
@@ -489,10 +493,10 @@ async def test_real_radarr_api_integration(
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_import_api_call_sequence(
-    integration_container, test_movie_file, radarr_movie_data, mock_radarr_api
+    radarr_integration_container, test_movie_file, radarr_movie_data, mock_radarr_api
 ):
     """Test that the correct sequence of API calls is made."""
-    radarr = integration_container.get(IRadarrService)
+    radarr = radarr_integration_container.get(IRadarrService)
 
     # Set up mock data
     mock_radarr_api.add_movie(radarr_movie_data)

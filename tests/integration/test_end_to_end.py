@@ -2,7 +2,7 @@
 
 import pytest
 
-from prompt_mapper.core.interfaces import IFileScanner, IMovieOrchestrator, ITMDbService
+from prompt_mapper.core.interfaces import IFileScanner, IMovieOrchestrator
 from prompt_mapper.core.models.processing_result import ProcessingStatus
 
 
@@ -67,16 +67,21 @@ async def test_file_scanner_list_files(integration_container, test_movies_path):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_tmdb_integration(integration_container):
-    """Test TMDb service integration."""
+async def test_tmdb_integration(integration_config):
+    """Test TMDb service integration with REAL TMDB API."""
+    import os
+
+    from prompt_mapper.config import ConfigManager
     from prompt_mapper.core.models import LLMResponse
+    from prompt_mapper.core.services import TMDbService
 
     # Check if TMDB is properly configured (not a placeholder test key)
-    config = integration_container.get_config()
-    if config.tmdb.api_key == "test-tmdb-key":
-        pytest.skip("TMDB_API_KEY not configured")
+    if os.getenv("TMDB_API_KEY", "test-tmdb-key") == "test-tmdb-key":
+        pytest.skip("TMDB_API_KEY not configured - skipping real API test")
 
-    tmdb_service = integration_container.get(ITMDbService)
+    # Use real TMDb service for this test
+    config_manager = ConfigManager(integration_config)
+    tmdb_service = TMDbService(config_manager.load_config())
 
     # Test search with known movie
     llm_response = LLMResponse(
@@ -101,10 +106,8 @@ async def test_tmdb_integration(integration_container):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_directory_processing(
-    integration_container, test_movies_path, setup_mock_responses, radarr_service
-):
-    """Test processing a directory with movie files."""
+async def test_directory_processing(integration_container, test_movies_path, setup_mock_responses):
+    """Test processing a directory with movie files (using mocked services)."""
     orchestrator = integration_container.get(IMovieOrchestrator)
 
     if not test_movies_path.exists():

@@ -49,6 +49,105 @@ class MockLLMService:
             return None, 0.0
 
 
+class MockTMDbService:
+    """Mock TMDB service for integration tests."""
+
+    async def search_movies(self, llm_response, max_results=10):
+        """Mock TMDB search - return fake candidate."""
+        from prompt_mapper.core.models import MovieCandidate, MovieInfo
+
+        # Create a mock candidate based on the search query
+        movie_info = MovieInfo(
+            tmdb_id=12345,
+            title=llm_response.canonical_title,
+            year=llm_response.year or 2020,
+            overview=f"Mock movie: {llm_response.canonical_title}",
+            poster_path=None,
+            imdb_id="tt1234567",
+        )
+
+        candidate = MovieCandidate(
+            movie_info=movie_info,
+            match_score=0.95,
+            search_query=llm_response.canonical_title,  # Add required field
+        )
+        return [candidate]
+
+    async def get_movie_details(self, tmdb_id):
+        """Mock getting movie details."""
+        from prompt_mapper.core.models import MovieInfo
+
+        return MovieInfo(
+            tmdb_id=tmdb_id,
+            title="Mock Movie",
+            year=2020,
+            overview="Mock movie details",
+            poster_path=None,
+            imdb_id="tt1234567",
+        )
+
+    async def get_movie_by_imdb_id(self, imdb_id):
+        """Mock getting movie by IMDB ID."""
+        from prompt_mapper.core.models import MovieInfo
+
+        return MovieInfo(
+            tmdb_id=12345,
+            title="Mock Movie",
+            year=2020,
+            overview="Mock movie from IMDB",
+            poster_path=None,
+            imdb_id=imdb_id,
+        )
+
+    def calculate_match_score(self, movie, llm_response):
+        """Mock match score calculation."""
+        return 0.95
+
+
+class MockRadarrService:
+    """Mock Radarr service for integration tests."""
+
+    async def get_movie_by_tmdb_id(self, tmdb_id):
+        """Mock getting movie from Radarr - always returns None (not in Radarr)."""
+        return None
+
+    async def add_movie(
+        self,
+        movie_info,
+        root_folder_path=None,
+        quality_profile_id=None,
+        minimum_availability=None,
+        tags=None,
+    ):
+        """Mock adding movie to Radarr."""
+        return {
+            "id": 123,
+            "title": movie_info.title,
+            "tmdbId": movie_info.tmdb_id,
+            "path": f"/movies/{movie_info.title} ({movie_info.year})",
+        }
+
+    async def import_movie_files(self, radarr_movie, source_paths, import_mode="hardlink"):
+        """Mock importing movie files."""
+        from prompt_mapper.core.interfaces.radarr_service import ImportResult
+
+        results = []
+        for path in source_paths:
+            results.append(
+                ImportResult(
+                    success=True,
+                    source_path=path,
+                    destination_path=Path(f"/movies/imported/{path.name}"),
+                    message="Mock import successful",
+                )
+            )
+        return results
+
+    async def trigger_movie_search(self, radarr_movie):
+        """Mock triggering movie search."""
+        return True
+
+
 @pytest.fixture(scope="session")
 def docker_compose_file():
     """Path to docker-compose file."""
@@ -209,7 +308,7 @@ def integration_config(tmp_path, radarr_url):
 
 @pytest.fixture
 def integration_container(integration_config):
-    """Create container with integration configuration."""
+    """Create container with integration configuration (all services mocked)."""
     config_manager = ConfigManager(integration_config)
     container = Container(config_manager)
 
@@ -217,24 +316,55 @@ def integration_container(integration_config):
     mock_llm = MockLLMService()
     container.register_instance(ILLMService, mock_llm)
 
-    # Configure other services normally
-    from prompt_mapper.core.interfaces import (
-        IFileScanner,
-        IMovieOrchestrator,
-        IMovieResolver,
-        IRadarrService,
-        ITMDbService,
-    )
-    from prompt_mapper.core.services import (
-        FileScanner,
-        MovieOrchestrator,
-        MovieResolver,
-        RadarrService,
-        TMDbService,
-    )
+    # Replace TMDB service with mock (to avoid real API calls in tests)
+    mock_tmdb = MockTMDbService()
+    from prompt_mapper.core.interfaces import ITMDbService
 
-    container.register_singleton(ITMDbService, TMDbService)
+    container.register_instance(ITMDbService, mock_tmdb)
+
+    # Replace Radarr service with mock (to avoid waiting for real Radarr)
+    mock_radarr = MockRadarrService()
+    from prompt_mapper.core.interfaces import IRadarrService
+
+    container.register_instance(IRadarrService, mock_radarr)
+
+    # Configure other services normally
+    from prompt_mapper.core.interfaces import IFileScanner, IMovieOrchestrator, IMovieResolver
+    from prompt_mapper.core.services import FileScanner, MovieOrchestrator, MovieResolver
+
+    container.register_singleton(IFileScanner, FileScanner)
+    container.register_singleton(IMovieResolver, MovieResolver)
+    container.register_singleton(IMovieOrchestrator, MovieOrchestrator)
+
+    return container
+
+
+@pytest.fixture
+def radarr_integration_container(integration_config):
+    """Create container with REAL Radarr service (for Radarr-specific tests)."""
+    config_manager = ConfigManager(integration_config)
+    container = Container(config_manager)
+
+    # Replace LLM service with mock
+    mock_llm = MockLLMService()
+    container.register_instance(ILLMService, mock_llm)
+
+    # Replace TMDB service with mock
+    mock_tmdb = MockTMDbService()
+    from prompt_mapper.core.interfaces import ITMDbService
+
+    container.register_instance(ITMDbService, mock_tmdb)
+
+    # Use REAL Radarr service (for tests that need to patch its internals)
+    from prompt_mapper.core.interfaces import IRadarrService
+    from prompt_mapper.core.services import RadarrService
+
     container.register_singleton(IRadarrService, RadarrService)
+
+    # Configure other services normally
+    from prompt_mapper.core.interfaces import IFileScanner, IMovieOrchestrator, IMovieResolver
+    from prompt_mapper.core.services import FileScanner, MovieOrchestrator, MovieResolver
+
     container.register_singleton(IFileScanner, FileScanner)
     container.register_singleton(IMovieResolver, MovieResolver)
     container.register_singleton(IMovieOrchestrator, MovieOrchestrator)
