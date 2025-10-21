@@ -1,6 +1,5 @@
 """Integration tests for Radarr import functionality."""
 
-import os
 from pathlib import Path
 from typing import Dict, List
 from unittest.mock import patch
