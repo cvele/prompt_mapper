@@ -82,7 +82,7 @@ def test_movies_path():
         test_path = Path(movies_dir)
 
     # Debug logging for CI troubleshooting
-    print("🔍 Test movies path resolution:")
+    print("Test movies path resolution:")
     print(f"   MOVIES_DIR env var: {os.getenv('MOVIES_DIR')}")
     print(f"   RUNNER_TEMP env var: {os.getenv('RUNNER_TEMP')}")
     print(f"   Resolved movies_dir: {movies_dir}")
@@ -111,7 +111,7 @@ async def radarr_service(radarr_url):
                 pass
 
             attempt += 1
-            print(f"⏳ Waiting for Radarr... ({attempt}/{max_attempts})")
+            print(f"Waiting for Radarr... ({attempt}/{max_attempts})")
             await asyncio.sleep(2)
 
     pytest.skip(f"Radarr not available at {radarr_url} after {max_attempts} attempts")

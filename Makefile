@@ -148,7 +148,7 @@ dist: build ## Build and check distribution
 # Binary Distribution
 build-binary: clean-dist install-binary ## Build standalone executable with PyInstaller
 	$(ACTIVATE) pyinstaller prompt_mapper.spec --clean --noconfirm
-	@echo "✅ Binary built successfully!"
+	@echo "Binary built successfully!"
 	@ls -la dist/
 
 build-binaries-all: ## Build binaries for all platforms (requires cross-compilation setup)
@@ -184,19 +184,19 @@ docker-logs: ## Show Docker container logs
 	docker-compose logs -f radarr
 
 test-movies: ## Create test movie files
-	@echo "📁 Creating test movie files..."
-	@echo "💡 Using MOVIES_DIR: $${MOVIES_DIR:-./test_movies}"
+	@echo "Creating test movie files..."
+	@echo "Using MOVIES_DIR: $${MOVIES_DIR:-./test_movies}"
 	@LC_ALL=C.UTF-8 LANG=C.UTF-8 python scripts/create_test_movies.py
 
 integration-setup: docker-up test-movies ## Set up complete integration test environment
 	@echo "Waiting for Radarr to be ready..."
-	@echo "💡 Test movies location: $${MOVIES_DIR:-./test_movies}"
+	@echo "Test movies location: $${MOVIES_DIR:-./test_movies}"
 	@for i in {1..30}; do \
 		if curl -f http://localhost:7878/ping >/dev/null 2>&1; then \
-			echo "✅ Radarr is ready!"; \
+			echo "Radarr is ready!"; \
 			break; \
 		fi; \
-		echo "⏳ Attempt $$i/30: Waiting for Radarr..."; \
+		echo "Attempt $$i/30: Waiting for Radarr..."; \
 		sleep 2; \
 	done
 	@./scripts/setup_radarr.sh

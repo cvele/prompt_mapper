@@ -314,7 +314,7 @@ class MovieOrchestrator(IMovieOrchestrator, LoggerMixin):
             result: Processing result to display.
         """
         if result.status == ProcessingStatus.SUCCESS:
-            click.echo("✓ Status: SUCCESS")
+            click.echo("Status: SUCCESS")
             if result.movie_match:
                 movie = result.movie_match.movie_info
                 click.echo(f"  Movie: {movie.title} ({movie.year})")
@@ -325,10 +325,10 @@ class MovieOrchestrator(IMovieOrchestrator, LoggerMixin):
 
             if result.radarr_action:
                 action_display = {
-                    RadarrAction.ADDED: "✓ Added to Radarr",
-                    RadarrAction.EXISTS: "= Already in Radarr",
-                    RadarrAction.SKIPPED: "⊘ Skipped",
-                    RadarrAction.FAILED: "✗ Failed",
+                    RadarrAction.ADDED: "Added to Radarr",
+                    RadarrAction.EXISTS: "Already in Radarr",
+                    RadarrAction.SKIPPED: "Skipped",
+                    RadarrAction.FAILED: "Failed",
                 }
                 click.echo(
                     f"  Radarr: {action_display.get(result.radarr_action, result.radarr_action.value)}"
@@ -337,12 +337,12 @@ class MovieOrchestrator(IMovieOrchestrator, LoggerMixin):
                     click.echo(f"  Radarr URL: {result.radarr_url}")
 
         elif result.status == ProcessingStatus.FAILED:
-            click.echo("✗ Status: FAILED")
+            click.echo("Status: FAILED")
             if result.error_message:
                 click.echo(f"  Error: {result.error_message}")
 
         elif result.status == ProcessingStatus.SKIPPED:
-            click.echo("⊘ Status: SKIPPED")
+            click.echo("Status: SKIPPED")
             if result.error_message:
                 click.echo(f"  Reason: {result.error_message}")
 

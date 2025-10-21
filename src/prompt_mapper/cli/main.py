@@ -161,8 +161,8 @@ def status(ctx: click.Context) -> None:
     # Configuration status
     click.echo(f"LLM Provider: {config.llm.provider}")
     click.echo(f"LLM Model: {config.llm.model}")
-    click.echo(f"TMDb Configured: {'✓' if config.tmdb.api_key else '✗'}")
-    click.echo(f"Radarr Enabled: {'✓' if config.radarr.enabled else '✗'}")
+    click.echo(f"TMDb Configured: {'Yes' if config.tmdb.api_key else 'No'}")
+    click.echo(f"Radarr Enabled: {'Yes' if config.radarr.enabled else 'No'}")
     click.echo(f"Confidence Threshold: {config.matching.confidence_threshold}")
 
     # Try to validate services
@@ -188,7 +188,7 @@ async def _run_scan(
         errors = await orchestrator.validate_prerequisites()
         if errors:
             for error in errors:
-                click.echo(f"✗ {error}", err=True)
+                click.echo(f"ERROR: {error}", err=True)
             raise PromptMapperError("Prerequisites not met")
 
         # Process directory
@@ -227,7 +227,7 @@ async def _validate_setup(container: Container) -> None:
 
     if errors:
         for error in errors:
-            click.echo(f"✗ {error}")
+            click.echo(f"ERROR: {error}")
         raise PromptMapperError("Validation failed")
 
 
@@ -239,11 +239,11 @@ async def _check_services_status(container: Container) -> None:
         radarr = container.get(IRadarrService)  # type: ignore
         if radarr.is_available():
             status = await radarr.get_system_status()
-            click.echo(f"Radarr Status: ✓ {status.get('version', 'Unknown')}")
+            click.echo(f"Radarr Status: OK {status.get('version', 'Unknown')}")
         else:
-            click.echo("Radarr Status: ✗ Unavailable")
+            click.echo("Radarr Status: Unavailable")
     except Exception:
-        click.echo("Radarr Status: ✗ Error")
+        click.echo("Radarr Status: Error")
 
 
 def main() -> None:
