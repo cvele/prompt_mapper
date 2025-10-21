@@ -5,6 +5,22 @@ from typing import Optional, Tuple, Union
 
 import guessit
 
+# Mapping of GuessIt edition names to readable format
+EDITION_MAP = {
+    "director's cut": "Director's Cut",
+    "directors cut": "Director's Cut",
+    "extended": "Extended",
+    "unrated": "Unrated",
+    "theatrical": "Theatrical",
+    "final cut": "Final Cut",
+    "remastered": "Remastered",
+    "special": "Special Edition",
+    "special edition": "Special Edition",
+    "ultimate": "Ultimate Edition",
+    "ultimate edition": "Ultimate Edition",
+    "criterion": "Criterion",
+}
+
 
 def clean_movie_filename(filename: Union[str, Path]) -> Tuple[str, Optional[int]]:
     """Extract movie name and year from filename using GuessIt library.
@@ -66,47 +82,17 @@ def extract_edition_info(filename: str) -> Optional[str]:
     if edition:
         # GuessIt returns edition as a list sometimes
         if isinstance(edition, list):
-            # Map GuessIt edition names to readable format
-            edition_map = {
-                "director's cut": "Director's Cut",
-                "directors cut": "Director's Cut",
-                "extended": "Extended",
-                "unrated": "Unrated",
-                "theatrical": "Theatrical",
-                "final cut": "Final Cut",
-                "remastered": "Remastered",
-                "special": "Special Edition",
-                "special edition": "Special Edition",
-                "ultimate": "Ultimate Edition",
-                "ultimate edition": "Ultimate Edition",
-                "criterion": "Criterion",
-            }
-
             result = []
             for e in edition:
                 e_str = str(e).lower()
                 # Check if it's in our map
-                mapped = edition_map.get(e_str, str(e).title())
+                mapped = EDITION_MAP.get(e_str, str(e).title())
                 result.append(mapped)
             return " ".join(result)
         else:
             # Single edition string
             e_str = str(edition).lower()
-            edition_map = {
-                "director's cut": "Director's Cut",
-                "directors cut": "Director's Cut",
-                "extended": "Extended",
-                "unrated": "Unrated",
-                "theatrical": "Theatrical",
-                "final cut": "Final Cut",
-                "remastered": "Remastered",
-                "special": "Special Edition",
-                "special edition": "Special Edition",
-                "ultimate": "Ultimate Edition",
-                "ultimate edition": "Ultimate Edition",
-                "criterion": "Criterion",
-            }
-            return edition_map.get(e_str, str(edition).title())
+            return EDITION_MAP.get(e_str, str(edition).title())
 
     # Fallback: Check title for edition keywords
     # Sometimes GuessIt includes edition info in the title
