@@ -210,16 +210,6 @@ tests/                     # Test suite
 config/                    # Configuration files
 ```
 
-## Architecture
-
-This project follows SOLID principles with dependency injection:
-
-- **Single Responsibility**: Each class has one reason to change
-- **Open/Closed**: Extensible through interfaces
-- **Liskov Substitution**: Implementations are interchangeable
-- **Interface Segregation**: Small, focused interfaces
-- **Dependency Inversion**: Depend on abstractions, not concretions
-
 ## Configuration
 
 The application uses YAML configuration with environment variable expansion:
