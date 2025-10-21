@@ -204,9 +204,9 @@ def main() -> None:
 
     # Fail if no files were created at all
     if successful_files == 0:
-        print(f"\nERROR: No test movie files were created!")
+        print("\nERROR: No test movie files were created!")
         print(f"   Attempted to create files in: {base_path}")
-        print(f"   Please check permissions and try again.")
+        print("   Please check permissions and try again.")
         sys.exit(1)
 
     # Create a summary file
