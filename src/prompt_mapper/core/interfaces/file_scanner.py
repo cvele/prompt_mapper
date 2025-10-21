@@ -41,6 +41,21 @@ class IFileScanner(ABC):
         pass
 
     @abstractmethod
+    async def list_movie_files(self, path: Path) -> List[Path]:
+        """List all movie files recursively in a directory (flat list).
+
+        Args:
+            path: Directory path to scan.
+
+        Returns:
+            Flat list of movie file paths.
+
+        Raises:
+            FileScannerError: If scan fails.
+        """
+        pass
+
+    @abstractmethod
     def is_video_file(self, path: Path) -> bool:
         """Check if file is a video file.
 

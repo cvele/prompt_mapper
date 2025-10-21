@@ -18,6 +18,7 @@ from .file_utils import (
     safe_copy_file,
     safe_move_file,
 )
+from .radarr_cleaner import clean_movie_filename, extract_edition_info
 from .text_utils import (
     calculate_similarity,
     clean_filename,
@@ -46,4 +47,6 @@ __all__ = [
     "create_hardlink",
     "safe_copy_file",
     "safe_move_file",
+    "clean_movie_filename",
+    "extract_edition_info",
 ]

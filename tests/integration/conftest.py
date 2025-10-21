@@ -17,49 +17,36 @@ class MockLLMService:
     """Mock LLM service for integration tests."""
 
     def __init__(self):
-        self.responses = {}
+        self.candidate_responses = {}
         self._call_count = 0
 
-    def add_response(self, filename_pattern: str, response: LLMResponse):
-        """Add a mock response for a filename pattern."""
-        self.responses[filename_pattern] = response
+    def add_candidate_response(self, filename_pattern: str, selected_index: int, confidence: float):
+        """Add a mock response for candidate selection."""
+        self.candidate_responses[filename_pattern.lower()] = (selected_index, confidence)
 
-    async def resolve_movies_batch(self, movies_data, user_prompt):
-        """Mock batch movie resolution."""
+    async def select_movie_from_candidates(
+        self, candidates, original_filename, movie_name, movie_year, user_prompt
+    ):
+        """Mock movie selection from candidates."""
         self._call_count += 1
-        responses = []
 
-        for movie_data in movies_data:
-            file_info = movie_data["file_info"]
+        # Default: select first candidate with medium confidence
+        selected_index = 0
+        confidence = 0.85
 
-            # Get the main file name
-            main_file = max(file_info, key=lambda f: f.size_bytes)
-            filename = main_file.name.lower()
+        # Check if we have a specific response for this filename
+        filename_lower = original_filename.lower()
+        for pattern, (idx, conf) in self.candidate_responses.items():
+            if pattern in filename_lower:
+                selected_index = idx
+                confidence = conf
+                break
 
-            # Find matching response
-            found_response = None
-            for pattern, response in self.responses.items():
-                if pattern.lower() in filename:
-                    found_response = response
-                    break
-
-            # Use found response or default
-            if found_response:
-                responses.append(found_response)
-            else:
-                responses.append(
-                    LLMResponse(
-                        canonical_title="Unknown Movie",
-                        year=2000,
-                        confidence=0.5,
-                        rationale="Mock response for testing",
-                    )
-                )
-
-        return responses
-
-    def validate_response(self, response: str) -> bool:
-        return True
+        # Return selected candidate and confidence
+        if candidates and 0 <= selected_index < len(candidates):
+            return candidates[selected_index], confidence
+        else:
+            return None, 0.0
 
 
 @pytest.fixture(scope="session")
@@ -95,7 +82,7 @@ def test_movies_path():
         test_path = Path(movies_dir)
 
     # Debug logging for CI troubleshooting
-    print(f"🔍 Test movies path resolution:")
+    print("🔍 Test movies path resolution:")
     print(f"   MOVIES_DIR env var: {os.getenv('MOVIES_DIR')}")
     print(f"   RUNNER_TEMP env var: {os.getenv('RUNNER_TEMP')}")
     print(f"   Resolved movies_dir: {movies_dir}")
@@ -173,7 +160,7 @@ def integration_config(tmp_path, radarr_url):
             "import": {"mode": "hardlink", "delete_empty_folders": False},
         },
         "matching": {
-            "confidence_threshold": 0.8,
+            "confidence_threshold": 0.95,
             "year_tolerance": 1,
             "max_search_results": 10,
             "auto_add_to_radarr": False,
@@ -207,9 +194,7 @@ def integration_config(tmp_path, radarr_url):
             "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         },
         "app": {
-            "dry_run": False,
             "interactive": False,
-            "batch_size": 5,
             "retry_attempts": 3,
             "cache_enabled": False,
         },
@@ -259,90 +244,18 @@ def integration_container(integration_config):
 
 @pytest.fixture
 def mock_llm_responses():
-    """Pre-configured mock LLM responses for test movies."""
+    """Pre-configured mock LLM candidate selection responses."""
+    # Map filename patterns to (selected_index, confidence)
     responses = {
-        "101 dalmatians (1961)": LLMResponse(
-            canonical_title="101 Dalmatians",
-            year=1961,
-            aka_titles=["One Hundred and One Dalmatians"],
-            language_hints=["en"],
-            confidence=0.95,
-            rationale="Classic Disney animated film",
-            genre_hints=["Animation", "Family", "Comedy"],
-        ),
-        "aladdin": LLMResponse(
-            canonical_title="Aladdin",
-            year=1992,
-            aka_titles=["Disney's Aladdin"],
-            language_hints=["en"],
-            confidence=0.98,
-            rationale="Disney animated classic",
-            genre_hints=["Animation", "Family", "Musical"],
-        ),
-        "asterix": LLMResponse(
-            canonical_title="Asterix the Gaul",
-            year=1967,
-            aka_titles=["Astérix le Gaulois"],
-            language_hints=["fr", "en"],
-            confidence=0.90,
-            rationale="French animated comic adaptation",
-            genre_hints=["Animation", "Comedy", "Family"],
-        ),
-        "bambi": LLMResponse(
-            canonical_title="Bambi",
-            year=1942,
-            aka_titles=[],
-            language_hints=["en"],
-            confidence=0.95,
-            rationale="Disney animated classic about a young deer",
-            genre_hints=["Animation", "Drama", "Family"],
-        ),
-        "cars": LLMResponse(
-            canonical_title="Cars",
-            year=2006,
-            aka_titles=[],
-            language_hints=["en"],
-            confidence=0.98,
-            rationale="Pixar animated film about racing cars",
-            genre_hints=["Animation", "Comedy", "Family", "Sport"],
-        ),
-        "beauty and the beast": LLMResponse(
-            canonical_title="Beauty and the Beast",
-            year=1991,
-            aka_titles=["La Belle et la Bête"],
-            language_hints=["en"],
-            confidence=0.95,
-            rationale="Disney animated musical",
-            genre_hints=["Animation", "Family", "Musical", "Romance"],
-        ),
-        "arthur": LLMResponse(
-            canonical_title="Arthur and the Invisibles",
-            year=2006,
-            aka_titles=["Arthur and the Minimoys", "Arthur et les Minimoys"],
-            language_hints=["fr", "en"],
-            confidence=0.85,
-            rationale="French fantasy adventure film",
-            genre_hints=["Animation", "Adventure", "Family"],
-        ),
-        # Serbian/Croatian titles
-        "ainbo": LLMResponse(
-            canonical_title="Ainbo: Spirit of the Amazon",
-            year=2021,
-            aka_titles=["Ainbo - Dobri duh Amazonije"],
-            language_hints=["en", "sr"],
-            confidence=0.88,
-            rationale="Animated adventure about Amazon rainforest",
-            genre_hints=["Animation", "Adventure", "Family"],
-        ),
-        "beli očnjak": LLMResponse(
-            canonical_title="White Fang",
-            year=2018,
-            aka_titles=["Beli očnjak"],
-            language_hints=["en", "sr"],
-            confidence=0.92,
-            rationale="Netflix animated adaptation of Jack London's novel",
-            genre_hints=["Animation", "Adventure", "Family"],
-        ),
+        "101 dalmatians": (0, 0.95),
+        "aladdin": (0, 0.98),
+        "asterix": (0, 0.90),
+        "bambi": (0, 0.95),
+        "cars": (0, 0.98),
+        "beauty and the beast": (0, 0.95),
+        "arthur": (0, 0.85),
+        "ainbo": (0, 0.88),
+        "beli": (0, 0.92),  # For "Beli očnjak"
     }
     return responses
 
@@ -352,8 +265,8 @@ def setup_mock_responses(integration_container, mock_llm_responses):
     """Set up mock LLM responses in the container."""
     llm_service = integration_container.get(ILLMService)
 
-    for pattern, response in mock_llm_responses.items():
-        llm_service.add_response(pattern, response)
+    for pattern, (idx, conf) in mock_llm_responses.items():
+        llm_service.add_candidate_response(pattern, idx, conf)
 
     return llm_service
 

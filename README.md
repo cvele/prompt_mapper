@@ -9,10 +9,10 @@ A powerful, prompt-driven tool for matching local movie files with canonical met
 - **Standalone binaries**: No Python installation required - just download and run
 - **Radarr integration**: Automatic movie addition and hard-link importing
 - **TMDb integration**: Accurate metadata matching
-- **Batch processing**: Efficiently handles directories with hundreds of movies
+- **File-by-file processing**: Simple iteration through movie files
 - **Configurable**: YAML-based configuration with profiles
 - **Testable architecture**: Dependency injection and SOLID principles
-- **Dry-run mode**: Test matching without making changes
+- **Manual fallback**: Low confidence matches trigger manual selection
 - **Version support**: `--version` flag shows current version
 
 ## Quick Start
@@ -67,18 +67,17 @@ prompt-mapper --version
 # Initialize configuration file
 prompt-mapper init
 
-# Scan a directory (automatically detects single movie vs multiple movies)
-prompt-mapper -c config.yaml scan /path/to/movie/directory
+# Scan a directory (processes all movie files recursively)
+prompt-mapper -c config.yaml scan /path/to/movies
 
 # Scan with custom prompt for Serbian/Croatian titles
 prompt-mapper -c config.yaml scan /path/to/movies --prompt "Serbian and Croatian titles, translate to English"
 
-# Dry run (no actual changes to Radarr)
-prompt-mapper -c config.yaml scan /path/to/movies --dry-run
+# Automatically add to Radarr without confirmation
+prompt-mapper -c config.yaml scan /path/to/movies --auto-add
 
-# Non-interactive mode (auto-select best matches)
-# Edit config.yaml: set interactive: false
-prompt-mapper -c config.yaml scan /path/to/movies
+# Use a named prompt profile
+prompt-mapper -c config.yaml scan /path/to/movies --profile international
 
 # Check system status
 prompt-mapper -c config.yaml status
@@ -99,21 +98,24 @@ prompt-mapper scan /movies --prompt "Serbian titles, translate to English"
 
 ### Large Directory Processing
 ```bash
-# Directory with 290 mixed movie files
+# Directory with multiple movie files
 prompt-mapper -c config.yaml scan /mixed_movies --prompt "Animated movies collection"
-# Behavior: Automatically detects multiple movies and processes each individually
-# Performance: Limits to first 20 movies to prevent overwhelming APIs
-# Result: Each movie gets analyzed separately by LLM and matched with TMDb
+# Flow for each file:
+#   1. Clean filename to extract movie name and year
+#   2. Search TMDb for candidates
+#   3. LLM selects best match from candidates
+#   4. If confidence < 0.95, request manual selection
+#   5. Add to Radarr (with optional confirmation)
 ```
 
-### Interactive vs Automated
+### Confidence-Based Selection
 ```bash
-# Interactive: Prompts for user confirmation
-prompt-mapper scan /movies  # Uses config: interactive: true
+# High confidence (≥0.95): Automatic selection
+# Low confidence (<0.95): Manual selection prompt
+prompt-mapper scan /movies  # Interactive by default
 
-# Automated: Auto-selects best matches
-# Edit config.yaml: set interactive: false
-prompt-mapper scan /movies  # No user prompts, processes automatically
+# Auto-add to Radarr without confirmation for each movie
+prompt-mapper scan /movies --auto-add
 ```
 
 ## Development
@@ -187,7 +189,7 @@ make integration-teardown # Clean up
 - 82 minimal dummy movie files (~332KB total) in flat structure
 - Serbian/Croatian titles: "Beli očnjak", "Čarobni princ", etc.
 - Real API integration: OpenAI (gpt-4o-mini), TMDb, Radarr
-- Automatic batch detection for multiple movies
+- File-by-file processing with confidence-based selection
 
 ### Project Structure
 

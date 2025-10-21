@@ -6,9 +6,9 @@ import click
 
 from ...config.models import Config
 from ...infrastructure.logging import LoggerMixin
-from ...utils import MovieResolverError
+from ...utils import MovieResolverError, clean_movie_filename
 from ..interfaces import ILLMService, IMovieResolver, ITMDbService
-from ..models import LLMResponse, MovieCandidate, MovieMatch, ScanResult
+from ..models import MovieCandidate, MovieMatch
 
 
 class MovieResolver(IMovieResolver, LoggerMixin):
@@ -27,15 +27,14 @@ class MovieResolver(IMovieResolver, LoggerMixin):
         self._tmdb_service = tmdb_service
         self._interactive = config.app.interactive
 
-    async def resolve_movie_from_llm_response(
-        self, scan_result: ScanResult, llm_response: LLMResponse, confidence_threshold: float = 0.8
-    ) -> MovieMatch:
-        """Resolve movie from LLM response and scan result.
+    async def resolve_movie_from_filename(self, filename: str, user_prompt: str) -> MovieMatch:
+        """Resolve movie from filename using the simplified flow.
+
+        Flow: clean filename → search TMDB → LLM selects → manual fallback if low confidence
 
         Args:
-            scan_result: File scan result.
-            llm_response: LLM response with movie information.
-            confidence_threshold: Minimum confidence for auto-selection.
+            filename: Movie filename to resolve.
+            user_prompt: User prompt for resolution guidance.
 
         Returns:
             Movie match result.
@@ -44,72 +43,131 @@ class MovieResolver(IMovieResolver, LoggerMixin):
             MovieResolverError: If resolution fails.
         """
         try:
-            # Step 1: Search TMDb for candidates
-            candidates = await self._tmdb_service.search_movies(
-                llm_response, max_results=self._config.matching.max_search_results
-            )
+            self.logger.info(f"Resolving movie from filename: {filename}")
+
+            # Step 1: Clean filename to extract movie name and year
+            movie_name, movie_year = clean_movie_filename(filename)
+            self.logger.debug(f"Cleaned: name='{movie_name}', year={movie_year}")
+
+            if not movie_name:
+                raise MovieResolverError("Could not extract movie name from filename")
+
+            # Step 2: Search TMDB
+            candidates = await self._search_tmdb(movie_name, movie_year)
 
             if not candidates:
-                raise MovieResolverError("No movie candidates found")
+                raise MovieResolverError(f"No TMDB candidates found for '{movie_name}'")
 
-            # Step 2: Determine if we can auto-select
-            top_candidate = candidates[0]
-            combined_confidence = self._calculate_combined_confidence(
-                llm_response.confidence, top_candidate.match_score
+            # Step 3: LLM selects best match from candidates
+            selected_candidate, confidence = await self._llm_service.select_movie_from_candidates(
+                candidates=candidates,
+                original_filename=filename,
+                movie_name=movie_name,
+                movie_year=movie_year,
+                user_prompt=user_prompt,
             )
 
-            auto_select = (
-                combined_confidence >= confidence_threshold
-                and top_candidate.match_score >= confidence_threshold
+            # Get confidence threshold
+            confidence_threshold = self._config.matching.confidence_threshold
+
+            # Step 4: Check if confidence is high enough
+            if selected_candidate and confidence >= confidence_threshold:
+                # Auto-select with high confidence
+                self.logger.info(
+                    f"Auto-selected: {selected_candidate.movie_info.title} "
+                    f"({selected_candidate.movie_info.year}) - confidence: {confidence:.2f}"
+                )
+
+                movie_match = MovieMatch(
+                    movie_info=selected_candidate.movie_info,
+                    confidence=confidence,
+                    llm_response=None,  # No longer using LLMResponse model
+                    candidates=candidates,
+                    selected_automatically=True,
+                    user_confirmed=False,
+                    rationale=f"LLM selection with {confidence:.2f} confidence",
+                )
+
+                return movie_match
+
+            # Step 5: Manual selection (low confidence or no LLM selection)
+            self.logger.info(f"Low confidence ({confidence:.2f}), requesting manual selection")
+            selected_index = await self.get_user_choice(
+                filename, movie_name, movie_year, candidates
             )
 
-            selected_candidate = None
-            user_confirmed = False
+            if selected_index is None:
+                raise MovieResolverError("User skipped selection")
 
-            if auto_select:
-                selected_candidate = top_candidate
-                self.logger.info(f"Auto-selected movie: {selected_candidate.movie_info.title}")
-            else:
-                # Step 3: Get user choice
-                choice_index = await self.get_user_choice(scan_result, candidates, llm_response)
-                if choice_index is not None:
-                    selected_candidate = candidates[choice_index]
-                    user_confirmed = True
-                    self.logger.info(f"User selected movie: {selected_candidate.movie_info.title}")
+            selected_candidate = candidates[selected_index]
+            self.logger.info(f"User selected: {selected_candidate.movie_info.title}")
 
-            if selected_candidate is None:
-                raise MovieResolverError("No movie selected")
-
-            # Create movie match
             movie_match = MovieMatch(
                 movie_info=selected_candidate.movie_info,
-                confidence=combined_confidence,
-                llm_response=llm_response,
+                confidence=1.0,  # Manual selections have 100% confidence
+                llm_response=None,
                 candidates=candidates,
-                selected_automatically=auto_select,
-                user_confirmed=user_confirmed,
-                rationale=f"LLM: {llm_response.rationale}; Match score: {selected_candidate.match_score:.3f}",
+                selected_automatically=False,
+                user_confirmed=True,
+                rationale="User manual selection",
             )
 
             return movie_match
 
         except Exception as e:
-            error_msg = f"Movie resolution failed: {e}"
+            error_msg = f"Movie resolution failed for '{filename}': {e}"
             self.logger.error(error_msg)
             raise MovieResolverError(error_msg) from e
 
+    async def _search_tmdb(
+        self, movie_name: str, movie_year: Optional[int]
+    ) -> List[MovieCandidate]:
+        """Search TMDB for movie candidates.
+
+        Args:
+            movie_name: Movie name to search.
+            movie_year: Optional year filter.
+
+        Returns:
+            List of movie candidates.
+        """
+        # Use TMDb service's search directly
+        # We'll create a simple query object
+        from ..models import LLMResponse
+
+        # Create a minimal LLMResponse for TMDb search compatibility
+        search_query = LLMResponse(
+            canonical_title=movie_name,
+            year=movie_year,
+            aka_titles=[],
+            language_hints=[],
+            confidence=1.0,
+            rationale="Direct filename search",
+            director=None,
+            genre_hints=[],
+            edition_notes=None,
+        )
+
+        candidates = await self._tmdb_service.search_movies(
+            search_query, max_results=self._config.matching.max_search_results
+        )
+
+        return candidates
+
     async def get_user_choice(
         self,
-        scan_result: ScanResult,
+        original_filename: str,
+        movie_name: str,
+        movie_year: Optional[int],
         candidates: List[MovieCandidate],
-        llm_response: Optional[LLMResponse] = None,
     ) -> Optional[int]:
         """Get user choice from movie candidates.
 
         Args:
-            scan_result: Original scan result.
+            original_filename: Original filename for display.
+            movie_name: Cleaned movie name.
+            movie_year: Extracted year.
             candidates: List of movie candidates.
-            llm_response: Original LLM response.
 
         Returns:
             Selected candidate index or None if skipped.
@@ -118,41 +176,41 @@ class MovieResolver(IMovieResolver, LoggerMixin):
             return None
 
         # Display information
-        click.echo(f"\nAnalyzing: {scan_result.root_path.name}")
-        if llm_response:
-            click.echo(f"LLM suggests: {llm_response.canonical_title}")
-            if llm_response.year:
-                click.echo(f"Year: {llm_response.year}")
-            click.echo(f"LLM confidence: {llm_response.confidence:.2f}")
-            if llm_response.rationale:
-                click.echo(f"Reasoning: {llm_response.rationale}")
+        click.echo("\n" + "=" * 70)
+        click.echo("Manual Selection Required")
+        click.echo("=" * 70)
+        click.echo(f"\nOriginal filename: {original_filename}")
+        click.echo(f"Cleaned name: {movie_name}")
+        if movie_year:
+            click.echo(f"Extracted year: {movie_year}")
 
-        click.echo(f"\nFound {len(candidates)} candidate(s):")
+        click.echo(f"\nFound {len(candidates)} candidate(s) from TMDb:")
 
         # Show candidates
-        for i, candidate in enumerate(candidates):
+        for i, candidate in enumerate(candidates, 1):
             movie = candidate.movie_info
-            click.echo(f"  {i + 1}. {movie.title} ({movie.year or 'Unknown'})")
-            click.echo(f"     TMDb ID: {movie.tmdb_id}, Score: {candidate.match_score:.3f}")
+            click.echo(f"\n  {i}. {movie.title} ({movie.year or 'Unknown'})")
+            click.echo(f"     TMDb ID: {movie.tmdb_id} | Score: {candidate.match_score:.3f}")
+            if movie.original_title and movie.original_title != movie.title:
+                click.echo(f"     Original Title: {movie.original_title}")
             if movie.overview:
                 overview = (
                     movie.overview[:100] + "..." if len(movie.overview) > 100 else movie.overview
                 )
                 click.echo(f"     {overview}")
 
-        # Get user choice
+        click.echo("\n" + "=" * 70)
 
         # Check if we're in a non-interactive environment
         if not self._interactive:
-            # Non-interactive mode - auto-select first candidate
             click.echo("Non-interactive mode: auto-selecting first candidate")
             return 0
 
-        # Interactive mode - use click.prompt for proper input handling
+        # Interactive mode - get user input
         while True:
             try:
                 choice = click.prompt(
-                    f"\nSelect movie (1-{len(candidates)}) or 's' to skip",
+                    f"Select movie (1-{len(candidates)}) or 's' to skip",
                     type=str,
                     default="1",
                     show_default=True,
@@ -182,16 +240,3 @@ class MovieResolver(IMovieResolver, LoggerMixin):
                 # Fallback to auto-select after error
                 click.echo("Falling back to auto-selection.")
                 return 0
-
-    def _calculate_combined_confidence(self, llm_confidence: float, match_score: float) -> float:
-        """Calculate combined confidence from LLM and match scores.
-
-        Args:
-            llm_confidence: LLM confidence score.
-            match_score: TMDb match score.
-
-        Returns:
-            Combined confidence score.
-        """
-        # Weight LLM confidence slightly higher since it has context
-        return (llm_confidence * 0.6) + (match_score * 0.4)

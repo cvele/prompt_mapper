@@ -1,42 +1,37 @@
 """LLM service interface."""
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List
+from typing import List, Optional, Tuple
 
-from ..models import LLMResponse
+from ..models import MovieCandidate
 
 
 class ILLMService(ABC):
     """Interface for LLM services."""
 
     @abstractmethod
-    async def resolve_movies_batch(
-        self, movies_data: List[Dict[str, Any]], user_prompt: str
-    ) -> List[LLMResponse]:
-        """Resolve movie information for multiple movies in a single LLM request.
+    async def select_movie_from_candidates(
+        self,
+        candidates: List[MovieCandidate],
+        original_filename: str,
+        movie_name: str,
+        movie_year: Optional[int],
+        user_prompt: str,
+    ) -> Tuple[Optional[MovieCandidate], float]:
+        """Select the best movie match from TMDB candidates using LLM.
 
         Args:
-            movies_data: List of movie data dictionaries, each containing:
-                - file_info: List[FileInfo] - File information objects
-                - context: str - Additional context information
-            user_prompt: User-provided prompt for resolution guidance.
+            candidates: List of movie candidates from TMDB search.
+            original_filename: Original filename for context.
+            movie_name: Cleaned movie name extracted from filename.
+            movie_year: Extracted year from filename (if any).
+            user_prompt: User-provided prompt for selection guidance.
 
         Returns:
-            List of LLM responses with movie resolutions, one per input movie.
+            Tuple of (selected_candidate, confidence_score).
+            Returns (None, 0.0) if no suitable match found.
 
         Raises:
             LLMServiceError: If LLM request fails.
-        """
-        pass
-
-    @abstractmethod
-    def validate_response(self, response: str) -> bool:
-        """Validate LLM response format.
-
-        Args:
-            response: Raw LLM response.
-
-        Returns:
-            True if response is valid, False otherwise.
         """
         pass

@@ -452,13 +452,15 @@ async def test_radarr_disabled_import(integration_container, test_movie_file, ra
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-@pytest.mark.skipif(
-    not os.getenv("RADARR_API_KEY"), reason="Requires real Radarr instance with RADARR_API_KEY"
-)
 async def test_real_radarr_api_integration(
     integration_container, radarr_service, sample_movie_info, test_movie_file
 ):
     """Test with real Radarr API (requires running Radarr instance)."""
+    # Check if Radarr is configured with a real API key (not placeholder)
+    config = integration_container.get_config()
+    if config.radarr.api_key == "test-radarr-api-key":
+        pytest.skip("Requires real Radarr instance with configured API key")
+
     radarr = integration_container.get(IRadarrService)
 
     try:

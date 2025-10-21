@@ -104,6 +104,59 @@ class FileScanner(IFileScanner, LoggerMixin):
 
         return scan_results
 
+    async def list_movie_files(self, path: Path) -> List[Path]:
+        """List all movie files recursively in a directory (flat list).
+
+        Args:
+            path: Directory path to scan.
+
+        Returns:
+            Flat list of movie file paths.
+
+        Raises:
+            FileScannerError: If scan fails.
+        """
+        if not path.exists():
+            raise FileScannerError(f"Path does not exist: {path}")
+
+        if not path.is_dir():
+            raise FileScannerError(f"Path is not a directory: {path}")
+
+        self.logger.info(f"Listing movie files in: {path}")
+
+        movie_files: List[Path] = []
+        await self._collect_movie_files(path, movie_files, depth=0)
+
+        self.logger.info(f"Found {len(movie_files)} movie files")
+        return movie_files
+
+    async def _collect_movie_files(
+        self, current_path: Path, movie_files: List[Path], depth: int
+    ) -> None:
+        """Recursively collect movie files.
+
+        Args:
+            current_path: Current directory being scanned.
+            movie_files: List to append found movie files.
+            depth: Current recursion depth.
+        """
+        if depth > self._max_depth:
+            return
+
+        try:
+            for item in current_path.iterdir():
+                if item.is_file():
+                    # Check if it's a movie file and not ignored
+                    if self.is_video_file(item) and not self.should_ignore_file(item):
+                        movie_files.append(item)
+                elif item.is_dir() and not is_hidden_file(item):
+                    # Recurse into subdirectory
+                    await self._collect_movie_files(item, movie_files, depth + 1)
+        except PermissionError:
+            self.logger.warning(f"Permission denied accessing: {current_path}")
+        except OSError as e:
+            self.logger.warning(f"Error accessing {current_path}: {e}")
+
     def is_video_file(self, path: Path) -> bool:
         """Check if file is a video file.
 

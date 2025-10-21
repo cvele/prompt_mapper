@@ -32,49 +32,49 @@ Enable users to reconcile locally stored movie files/folders with canonical entr
   * Auto-add/auto-import toggles.
   * Dry-run toggle.
 
-## Core Flow
+## Core Flow (Simplified)
 
-1. **Scan & Parse**
+For each movie file in directory:
 
-   * Collect candidate filenames and folder name(s) under the target path.
+1. **Check if Movie File**
+   * Verify file is a video file (by extension and size)
+   * Skip if not a valid movie file
 
-2. **Prompt-Driven LLM Resolution**
+2. **Clean Filename**
+   * Use Radarr-style cleaning logic
+   * Extract movie name and year from filename
+   * Remove quality indicators, codecs, release groups, etc.
 
-   * Send the **user’s prompt** + observed names + any extracted hints (e.g., year tokens) to the LLM.
-   * LLM returns a **structured result**:
+3. **Search TMDb**
+   * Search TMDb using cleaned movie name and year
+   * Return top N candidates (default: 10)
+   * Rank by deterministic scoring (title similarity, year proximity, popularity, language match)
 
-     * `canonical_title` (string)
-     * `year` (int or null)
-     * `aka_titles` (array)
-     * `language_hints` (array)
-     * `confidence` (0–1)
-     * `rationale` (string, short)
+4. **LLM Selects Best Match**
+   * Send TMDB candidates to LLM with original filename context
+   * LLM analyzes and selects the best matching candidate
+   * Returns selected candidate and confidence score (0.0-1.0)
 
-3. **TMDb Matching**
+5. **Confidence Check**
+   * If confidence ≥ 0.95 (configurable threshold): Auto-select
+   * If confidence < 0.95: Request manual selection from user
+   * Manual selections have confidence = 1.0
 
-   * Search TMDb using `canonical_title` plus `aka_titles`, constrained by `year` if provided (±1 tolerance).
-   * Rank candidates using deterministic scoring (title similarity, year proximity, popularity, original language match).
-   * Produce **top-N** candidates with a **match score**.
+6. **Manual Selection UI** (if needed)
+   * Display original filename as hint
+   * Show numbered list of TMDB candidates
+   * User types number to select or 's' to skip
 
-4. **Decision**
+7. **Add to Radarr**
+   * Check if movie already exists in Radarr by TMDb ID
+   * If exists: Skip (already in library)
+   * If not exists: Add movie to Radarr
+   * Optional: Request confirmation unless --auto-add flag is used
 
-   * If top candidate score ≥ user threshold and aligns with LLM `confidence` → select automatically (unless user forces review).
-   * Else show a **review card** (poster, title, year, overview, alt candidates) for user choice: **Confirm / Choose Alternative / Skip**.
-
-5. **Radarr Upsert**
-
-   * Check Radarr for existing entry by TMDb ID.
-   * If missing: **Add** with user’s profile/root/tags.
-   * If present: reuse the existing movie entry.
-
-6. **Import (Hard-Link Default)**
-
-   * Trigger Radarr import for file(s) from the target path into the matched movie using **hard-link** strategy.
-   * Report per-file results (imported, duplicate, already linked, skipped).
-
-7. **Summarize & Continue**
-
-   * Show a concise result (matched ID, actions taken) and proceed to next item (or end with a session summary).
+8. **Report & Continue**
+   * Display result for this file
+   * Continue to next file
+   * Show session summary at end
 
 ## Prompts & Interactions
 
@@ -108,16 +108,16 @@ Enable users to reconcile locally stored movie files/folders with canonical entr
 
 ## Preferences & Policies
 
-* **Privacy**: Send only sanitized strings + optional year to LLM (no full paths or PII).
-* **Safety**: Default to review on low confidence; optional auto-mode only above threshold.
-* **Reproducibility**: Store prompt + decisions in the audit log.
-* **Undo**: Quick remove from Radarr (if newly added) and revert last import when feasible.
+* **Privacy**: Send only filename, cleaned movie name, and year to LLM (no full paths)
+* **Safety**: Manual review required for confidence < 0.95 (default threshold)
+* **Simplicity**: KISS - simple for-loop processing, no batching, no dry-run mode
+* **SOLID**: Clean separation of concerns with dependency injection
 
-## Modes
+## Processing Model
 
-* **Single-item mode**: One directory at a time (interactive).
-* **Batch mode**: Process a queue; pause on ambiguities or collect them for later review.
-* **Dry-run**: Resolve and rank only; no Radarr calls or imports.
+* **File-by-file iteration**: Process each movie file individually in a directory
+* **Interactive mode**: Request manual selection when confidence is below threshold
+* **Auto-add mode**: Skip Radarr confirmation prompts with --auto-add flag
 
 ## Success Criteria
 
