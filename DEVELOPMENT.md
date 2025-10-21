@@ -126,7 +126,7 @@ make run                    # Show help
 prompt-mapper init         # Create config file
 make run-test-auto         # Test automated mode
 make run-test              # Test interactive mode
-prompt-mapper scan /path/to/movies --dry-run
+prompt-mapper scan /path/to/movies
 ```
 
 ## Testing

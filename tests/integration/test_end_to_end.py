@@ -16,6 +16,13 @@ async def test_file_scanner_integration(integration_container, test_movies_path)
     if not test_movies_path.exists():
         pytest.skip(f"Test directory not found: {test_movies_path}")
 
+    # Check if directory has any .mkv files
+    mkv_files = list(test_movies_path.glob("*.mkv"))
+    if len(mkv_files) == 0:
+        pytest.skip(
+            f"No test movie files found in: {test_movies_path}. Test movies may not have been created."
+        )
+
     result = await scanner.scan_directory(test_movies_path)
 
     assert result.root_path == test_movies_path
@@ -41,6 +48,13 @@ async def test_file_scanner_list_files(integration_container, test_movies_path):
 
     if not test_movies_path.exists():
         pytest.skip(f"Test directory not found: {test_movies_path}")
+
+    # Check if directory has any .mkv files
+    mkv_files = list(test_movies_path.glob("*.mkv"))
+    if len(mkv_files) == 0:
+        pytest.skip(
+            f"No test movie files found in: {test_movies_path}. Test movies may not have been created."
+        )
 
     # Test the new list_movie_files method
     movie_files = await scanner.list_movie_files(test_movies_path)
@@ -95,6 +109,13 @@ async def test_directory_processing(
 
     if not test_movies_path.exists():
         pytest.skip(f"Test directory not found: {test_movies_path}")
+
+    # Check if directory has any .mkv files
+    mkv_files = list(test_movies_path.glob("*.mkv"))
+    if len(mkv_files) == 0:
+        pytest.skip(
+            f"No test movie files found in: {test_movies_path}. Test movies may not have been created."
+        )
 
     # Process the directory - this will process each file individually
     summary = await orchestrator.process_directory(

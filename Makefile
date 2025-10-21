@@ -138,9 +138,6 @@ test-integration-cov: ## Run integration tests with coverage
 run: ## Run the application
 	$(ACTIVATE) prompt-mapper --help
 
-run-dry: ## Run in dry-run mode with example
-	$(ACTIVATE) prompt-mapper scan ./examples --dry-run
-
 # Build and Distribution
 build: clean-dist ## Build distribution packages
 	$(ACTIVATE) python -m build
@@ -189,7 +186,7 @@ docker-logs: ## Show Docker container logs
 test-movies: ## Create test movie files
 	@echo "📁 Creating test movie files..."
 	@echo "💡 Using MOVIES_DIR: $${MOVIES_DIR:-./test_movies}"
-	@LC_ALL=C.UTF-8 LANG=C.UTF-8 python scripts/create_test_movies.py || (echo "⚠️ Test movies creation failed (likely permissions)" && exit 0)
+	@LC_ALL=C.UTF-8 LANG=C.UTF-8 python scripts/create_test_movies.py
 
 integration-setup: docker-up test-movies ## Set up complete integration test environment
 	@echo "Waiting for Radarr to be ready..."

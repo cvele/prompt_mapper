@@ -28,14 +28,9 @@ prompt-mapper scan examples/
 prompt-mapper scan examples/ --prompt "These are classic sci-fi movies with standard naming"
 ```
 
-### Dry Run
+### Auto-add to Radarr
 ```bash
-prompt-mapper scan examples/ --dry-run
-```
-
-### Batch Processing
-```bash
-prompt-mapper scan examples/*/ --batch
+prompt-mapper scan examples/ --auto-add
 ```
 
 ## Test Configuration

@@ -18,19 +18,18 @@ Enable users to reconcile locally stored movie files/folders with canonical entr
 
 * **Power user / librarian**: Wants to apply custom rules (e.g., local naming conventions, festival titles, regional releases).
 * **Collector**: Wants a semi-automated pass with minimal prompts.
-* **Archivist**: Needs auditability, reversibility, and dry-runs.
+* **Archivist**: Needs auditability and careful review of matches.
 
 ## Inputs
 
-* **Target path**: Directory containing one movie (or batch mode: many).
-* **User prompt** (required per run or profile): Free-form text that explains how to interpret filenames/folders (e.g., languages, transliteration rules, year inference, edition/director’s cut hints, how to treat roman numerals, etc.).
+* **Target path**: Directory containing movie files (processed individually).
+* **User prompt** (required per run or profile): Free-form text that explains how to interpret filenames/folders (e.g., languages, transliteration rules, year inference, edition/director's cut hints, how to treat roman numerals, etc.).
 * **Optional context**:
 
   * Locale(s) and preferred title languages.
-  * Confidence threshold (0–1).
+  * Confidence threshold (0–1, default 0.95).
   * Radarr root folder, quality profile, tags, minimum availability.
   * Auto-add/auto-import toggles.
-  * Dry-run toggle.
 
 ## Core Flow (Simplified)
 

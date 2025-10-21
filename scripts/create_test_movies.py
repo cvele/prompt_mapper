@@ -3,6 +3,7 @@
 
 import locale
 import os
+import sys
 from pathlib import Path
 
 # Movie files from the screenshot - flat structure (filename, unused_size_range)
@@ -200,6 +201,13 @@ def main() -> None:
     if successful_files != total_files:
         print(f"⚠️  {total_files - successful_files} files failed (likely permission issues)")
     print(f"📊 Total size: {successful_files} bytes (~{successful_files / 1024:.2f} KB)")
+
+    # Fail if no files were created at all
+    if successful_files == 0:
+        print(f"\n❌ ERROR: No test movie files were created!")
+        print(f"   Attempted to create files in: {base_path}")
+        print(f"   Please check permissions and try again.")
+        sys.exit(1)
 
     # Create a summary file
     summary_path = base_path / "README.md"

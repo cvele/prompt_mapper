@@ -125,7 +125,6 @@ def test_cli_with_real_api_keys(test_movies_path, integration_config):
                 "prompt_mapper.cli",
                 "--config",
                 config_path,
-                "--dry-run",
                 "scan",
                 str(test_movies_path),
             ],
