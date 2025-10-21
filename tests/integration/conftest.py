@@ -69,7 +69,7 @@ class MockTMDbService:
         candidate = MovieCandidate(
             movie_info=movie_info,
             match_score=0.95,
-            search_query=llm_response.canonical_title,  # Add required field
+            search_query=llm_response.canonical_title,
         )
         return [candidate]
 
