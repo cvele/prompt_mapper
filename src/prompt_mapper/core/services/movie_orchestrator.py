@@ -17,7 +17,7 @@ from ..interfaces import (
     ITMDbService,
 )
 from ..interfaces.radarr_service import RadarrMovie
-from ..models import ProcessingResult, SessionSummary
+from ..models import ImportResult, ProcessingResult, SessionSummary
 from ..models.processing_result import ProcessingStatus, RadarrAction
 
 
@@ -195,12 +195,13 @@ class MovieOrchestrator(IMovieOrchestrator, LoggerMixin):
                 if full_movie_info:
                     movie_match.movie_info = full_movie_info
 
-            # Step 3: Add movie to Radarr
+            # Step 3: Add movie to Radarr and import file
             if self._config.radarr.enabled:
-                radarr_action, radarr_movie = await self._handle_radarr_integration(
-                    movie_match, auto_add
+                radarr_action, radarr_movie, import_results = await self._handle_radarr_integration(
+                    movie_match, auto_add, movie_file
                 )
                 result.radarr_action = radarr_action
+                result.import_results = import_results
 
                 # Generate Radarr URL if movie was added or exists
                 if radarr_movie:
@@ -230,17 +231,20 @@ class MovieOrchestrator(IMovieOrchestrator, LoggerMixin):
         return result
 
     async def _handle_radarr_integration(
-        self, movie_match: Any, auto_add: bool
-    ) -> Tuple[RadarrAction, Optional[RadarrMovie]]:
+        self, movie_match: Any, auto_add: bool, source_file: Path
+    ) -> Tuple[RadarrAction, Optional[RadarrMovie], List[ImportResult]]:
         """Handle Radarr integration for a movie match.
 
         Args:
             movie_match: Movie match result.
             auto_add: Whether to automatically add movies.
+            source_file: Path to source movie file for import.
 
         Returns:
-            Tuple of (RadarrAction, radarr_movie_object).
+            Tuple of (RadarrAction, radarr_movie_object, import_results).
         """
+        import_results: List[ImportResult] = []
+
         try:
             # Check if movie already exists in Radarr
             tmdb_id = movie_match.movie_info.tmdb_id
@@ -251,13 +255,19 @@ class MovieOrchestrator(IMovieOrchestrator, LoggerMixin):
 
             if existing_movie:
                 self.logger.info(f"Movie already exists in Radarr: {movie_match.movie_info.title}")
-                return RadarrAction.EXISTS, existing_movie
+                # Try to import the file for existing movie
+                import_results = await self._handle_file_import(
+                    existing_movie, source_file, auto_add
+                )
+                return RadarrAction.EXISTS, existing_movie, import_results
 
             # Add movie to Radarr
             if auto_add or self._config.matching.auto_add_to_radarr:
                 new_movie = await self._radarr_service.add_movie(movie_match.movie_info)
                 self.logger.info(f"Added to Radarr: {movie_match.movie_info.title}")
-                return RadarrAction.ADDED, new_movie
+                # Try to import the file for newly added movie
+                import_results = await self._handle_file_import(new_movie, source_file, auto_add)
+                return RadarrAction.ADDED, new_movie, import_results
             else:
                 # Ask user for confirmation
                 try:
@@ -266,16 +276,90 @@ class MovieOrchestrator(IMovieOrchestrator, LoggerMixin):
                     ):
                         new_movie = await self._radarr_service.add_movie(movie_match.movie_info)
                         self.logger.info(f"Added to Radarr: {movie_match.movie_info.title}")
-                        return RadarrAction.ADDED, new_movie
+                        # Try to import the file for newly added movie
+                        import_results = await self._handle_file_import(
+                            new_movie, source_file, auto_add
+                        )
+                        return RadarrAction.ADDED, new_movie, import_results
                     else:
                         self.logger.info("User skipped adding to Radarr")
-                        return RadarrAction.SKIPPED, None
+                        return RadarrAction.SKIPPED, None, import_results
                 except (EOFError, KeyboardInterrupt):
-                    return RadarrAction.SKIPPED, None
+                    return RadarrAction.SKIPPED, None, import_results
 
         except Exception as e:
             self.logger.error(f"Radarr integration failed: {e}")
-            return RadarrAction.FAILED, None
+            return RadarrAction.FAILED, None, import_results
+
+    async def _handle_file_import(
+        self, radarr_movie: RadarrMovie, source_file: Path, auto_add: bool
+    ) -> List[ImportResult]:
+        """Handle file import for a Radarr movie.
+
+        Args:
+            radarr_movie: Radarr movie object.
+            source_file: Path to source movie file.
+            auto_add: Whether to automatically import without confirmation.
+
+        Returns:
+            List of import results.
+        """
+        import_results: List[ImportResult] = []
+
+        try:
+            # Determine if we should import
+            should_import = False
+
+            if auto_add or self._config.matching.auto_import:
+                should_import = True
+                self.logger.info(f"Auto-importing file: {source_file.name}")
+            else:
+                # Ask user for confirmation
+                try:
+                    if click.confirm(
+                        f"\nImport file '{source_file.name}' into Radarr?", default=True
+                    ):
+                        should_import = True
+                except (EOFError, KeyboardInterrupt):
+                    self.logger.info("User skipped file import")
+                    return import_results
+
+            if should_import:
+                # Get import mode from config
+                import_mode = self._config.radarr.import_config.mode
+
+                # Call the import_movie_files method
+                import_results = await self._radarr_service.import_movie_files(
+                    radarr_movie=radarr_movie,
+                    source_paths=[source_file],
+                    import_mode=import_mode,
+                )
+
+                # Log results
+                for result in import_results:
+                    if result.imported:
+                        self.logger.info(
+                            f"Successfully imported: {result.file_path} -> {result.target_path}"
+                        )
+                    else:
+                        self.logger.warning(
+                            f"Failed to import: {result.file_path} - {result.error}"
+                        )
+
+        except Exception as e:
+            self.logger.error(f"File import failed: {e}")
+            # Return failure result
+            import_results.append(
+                ImportResult(
+                    file_path=source_file,
+                    imported=False,
+                    target_path=None,
+                    error=str(e),
+                    method=None,
+                )
+            )
+
+        return import_results
 
     async def validate_prerequisites(self) -> List[str]:
         """Validate that all prerequisites are met.
@@ -336,6 +420,20 @@ class MovieOrchestrator(IMovieOrchestrator, LoggerMixin):
                 if result.radarr_url:
                     click.echo(f"  Radarr URL: {result.radarr_url}")
 
+            # Display import results
+            if result.import_results:
+                for import_result in result.import_results:
+                    if import_result.imported:
+                        click.echo("  Import: SUCCESS")
+                        if import_result.target_path:
+                            click.echo(f"    Target: {import_result.target_path}")
+                        if import_result.method:
+                            click.echo(f"    Method: {import_result.method}")
+                    else:
+                        click.echo("  Import: FAILED")
+                        if import_result.error:
+                            click.echo(f"    Error: {import_result.error}")
+
         elif result.status == ProcessingStatus.FAILED:
             click.echo("Status: FAILED")
             if result.error_message:
@@ -361,6 +459,7 @@ class MovieOrchestrator(IMovieOrchestrator, LoggerMixin):
             click.echo(f"Success Rate: {summary.success_rate:.1%}")
 
         click.echo(f"Movies Added to Radarr: {summary.movies_added_to_radarr}")
+        click.echo(f"Files Imported: {summary.files_imported}")
         click.echo(f"Total Time: {summary.total_processing_time_seconds:.1f}s")
 
         if summary.successful > 0:
