@@ -292,7 +292,7 @@ class RadarrService(IRadarrService, LoggerMixin):
             params = {
                 "folder": folder_path,
                 "downloadId": "",  # Empty for manual import
-                "filterExistingFiles": True,
+                "filterExistingFiles": "true",
             }
 
             response = await self._get_client().get(url, headers=headers, params=params)
