@@ -3,9 +3,14 @@
 import sys
 from pathlib import Path
 import certifi
+from PyInstaller.utils.hooks import collect_data_files
 
 # Get the source directory
 src_dir = Path('src')
+
+# Collect data files from packages that need them
+guessit_datas = collect_data_files('guessit')
+babelfish_datas = collect_data_files('babelfish')
 
 # Analysis configuration
 a = Analysis(
@@ -15,6 +20,9 @@ a = Analysis(
     datas=[
         # Include configuration example
         ('config/config.example.yaml', 'config/'),
+        # Include data files for guessit and babelfish
+        *guessit_datas,
+        *babelfish_datas,
     ],
     hiddenimports=[
         # Core dependencies
@@ -48,6 +56,13 @@ a = Analysis(
         'httpx._client',
         'httpx._config',
         'httpx._types',
+        # GuessIt and dependencies
+        'guessit',
+        'babelfish',
+        'babelfish.converters',
+        'babelfish.country',
+        'babelfish.language',
+        'rebulk',
         # Platform-specific imports
         'asyncio',
         'ssl',
