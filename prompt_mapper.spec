@@ -60,12 +60,17 @@ a = Analysis(
         'guessit',
         'babelfish',
         'babelfish.converters',
+        # Language converters
         'babelfish.converters.alpha2',
         'babelfish.converters.alpha3b',
         'babelfish.converters.alpha3t',
         'babelfish.converters.name',
         'babelfish.converters.opensubtitles',
         'babelfish.converters.scope',
+        # Country converters
+        'babelfish.converters.countryname',
+        'babelfish.converters.countryalpha2',
+        'babelfish.converters.countryalpha3',
         'babelfish.country',
         'babelfish.language',
         'rebulk',
