@@ -1,134 +1,67 @@
-"""Radarr-style filename cleaning utilities."""
+"""Movie filename parsing utilities using GuessIt library."""
 
-import re
 from pathlib import Path
 from typing import Optional, Tuple, Union
 
+import guessit
+
+# Mapping of GuessIt edition names to readable format
+EDITION_MAP = {
+    "director's cut": "Director's Cut",
+    "directors cut": "Director's Cut",
+    "extended": "Extended",
+    "unrated": "Unrated",
+    "theatrical": "Theatrical",
+    "final cut": "Final Cut",
+    "remastered": "Remastered",
+    "special": "Special Edition",
+    "special edition": "Special Edition",
+    "ultimate": "Ultimate Edition",
+    "ultimate edition": "Ultimate Edition",
+    "criterion": "Criterion",
+}
+
 
 def clean_movie_filename(filename: Union[str, Path]) -> Tuple[str, Optional[int]]:
-    """Clean movie filename using Radarr-style parsing logic.
-
-    Extracts movie name and year from filename by removing common patterns
-    like quality indicators, codecs, release groups, etc.
+    """Extract movie name and year from filename using GuessIt library.
 
     Args:
         filename: Original filename (can be full path or just filename).
 
     Returns:
-        Tuple of (cleaned_movie_name, year_or_none).
+        Tuple of (movie_title, year_or_none).
 
     Examples:
         >>> clean_movie_filename("The.Matrix.1999.1080p.BluRay.x264-GROUP")
         ('The Matrix', 1999)
         >>> clean_movie_filename("Inception (2010) [1080p]")
         ('Inception', 2010)
+        >>> clean_movie_filename("Goosebumps.2015.1080p.BluRay.DTS.X264.CyTSuNee.mkv")
+        ('Goosebumps', 2015)
     """
     # Convert Path to string if needed
     if isinstance(filename, Path):
-        filename = filename.stem  # Get filename without extension
+        filename = str(filename.name)  # Get just the filename part
     else:
-        # Remove file extension
-        filename = re.sub(r"\.[^.]+$", "", filename)
+        # Extract just the filename if it's a full path
+        filename = str(Path(filename).name)
 
-    original = filename
+    # Use GuessIt to parse the filename
+    guess = guessit.guessit(filename)
 
-    # Extract year first (we'll use it for splitting)
-    year = _extract_year(original)
+    # Extract title
+    title = guess.get("title", "")
 
-    # Remove content in brackets and parentheses (often contains quality/year)
-    # But keep the year if it's there
-    filename = re.sub(r"\[[^\]]*\]", "", filename)
-    filename = re.sub(r"\([^)]*\)", "", filename)
+    # Remove "sample" from title if present (sample files)
+    if title and "sample" in title.lower():
+        # Remove the word "sample" from the title
+        title = " ".join(word for word in title.split() if word.lower() != "sample")
+        title = title.strip()
 
-    # Remove quality indicators
-    quality_patterns = [
-        r"\b(2160p|1080p|720p|480p|4k|uhd|hd|sd)\b",
-        r"\b(bluray|bdrip|brrip|webrip|web-dl|webdl|hdtv|dvdrip|dvd|vhs)\b",
-        r"\b(remux|repack|proper|real|retail)\b",
-    ]
-    for pattern in quality_patterns:
-        filename = re.sub(pattern, " ", filename, flags=re.IGNORECASE)
+    # Extract year if available
+    year = guess.get("year")
 
-    # Remove codec information
-    codec_patterns = [
-        r"\b(x264|x265|h264|h265|hevc|xvid|divx|avc)\b",
-        r"\b(10bit|8bit|hi10p)\b",
-    ]
-    for pattern in codec_patterns:
-        filename = re.sub(pattern, " ", filename, flags=re.IGNORECASE)
-
-    # Remove audio information
-    audio_patterns = [
-        r"\b(aac|ac3|dts|dts-hd|truehd|atmos|dd|dd\+|eac3|flac|mp3|pcm)\b",
-        r"\b([257])\.1\b",  # 2.1, 5.1, 7.1 audio
-    ]
-    for pattern in audio_patterns:
-        filename = re.sub(pattern, " ", filename, flags=re.IGNORECASE)
-
-    # Remove release group (usually at the end after a dash or in brackets)
-    filename = re.sub(r"-[A-Za-z0-9]+$", "", filename)
-    filename = re.sub(r"\{[^}]+\}", "", filename)
-
-    # Remove other common tags
-    other_patterns = [
-        r"\b(extended|unrated|remastered|theatrical|director\'?s?\.?cut|final\.cut|special\.edition)\b",
-        r"\b(internal|limited|festival|subbed|dubbed|multi|dual)\b",
-        r"\b(complete|proper|real|retail)\b",
-    ]
-    for pattern in other_patterns:
-        filename = re.sub(pattern, " ", filename, flags=re.IGNORECASE)
-
-    # Remove year from title if present (we already extracted it)
-    if year:
-        filename = re.sub(rf"\b{year}\b", "", filename)
-
-    # Replace dots, underscores with spaces
-    filename = re.sub(r"[._]", " ", filename)
-
-    # Remove multiple spaces
-    filename = re.sub(r"\s+", " ", filename)
-
-    # Clean up and capitalize
-    filename = filename.strip()
-
-    # Remove "sample" if present
-    if "sample" in filename.lower():
-        filename = re.sub(r"\bsample\b", "", filename, flags=re.IGNORECASE)
-        filename = re.sub(r"\s+", " ", filename).strip()
-
-    if not filename:
-        # Fallback to original if we cleaned too much
-        filename = re.sub(r"[._]", " ", original)
-        filename = re.sub(r"\s+", " ", filename).strip()
-
-    return filename, year
-
-
-def _extract_year(filename: str) -> Optional[int]:
-    """Extract year from filename.
-
-    Args:
-        filename: Filename to parse.
-
-    Returns:
-        Extracted year or None if not found.
-    """
-    # Look for year in common patterns
-    year_patterns = [
-        r"\((\d{4})\)",  # (2020)
-        r"\[(\d{4})\]",  # [2020]
-        r"\b(19\d{2}|20[0-2]\d)\b",  # 1900-2029
-    ]
-
-    for pattern in year_patterns:
-        match = re.search(pattern, filename)
-        if match:
-            year = int(match.group(1))
-            # Reasonable year range for movies
-            if 1900 <= year <= 2030:
-                return year
-
-    return None
+    return title, year
 
 
 def extract_edition_info(filename: str) -> Optional[str]:
@@ -140,20 +73,61 @@ def extract_edition_info(filename: str) -> Optional[str]:
     Returns:
         Edition information or None if not found.
     """
-    edition_patterns = [
-        (r"director'?s?\.?\s*cut", "Director's Cut"),
-        (r"extended\.?\s*(cut|edition)?", "Extended"),
-        (r"unrated\.?\s*(cut|edition)?", "Unrated"),
-        (r"theatrical\.?\s*(cut|edition)?", "Theatrical"),
-        (r"final\.?\s*cut", "Final Cut"),
-        (r"remastered", "Remastered"),
-        (r"special\.?\s*edition", "Special Edition"),
-        (r"ultimate\.?\s*edition", "Ultimate Edition"),
-        (r"criterion\.?\s*(collection|edition)", "Criterion"),
-    ]
+    # Use GuessIt to parse the filename
+    guess = guessit.guessit(filename)
 
-    for pattern, label in edition_patterns:
-        if re.search(pattern, filename, re.IGNORECASE):
-            return label
+    # GuessIt provides 'edition' field for special editions
+    edition = guess.get("edition")
+
+    if edition:
+        # GuessIt returns edition as a list sometimes
+        if isinstance(edition, list):
+            result = []
+            for e in edition:
+                e_str = str(e).lower()
+                # Check if it's in our map
+                mapped = EDITION_MAP.get(e_str, str(e).title())
+                result.append(mapped)
+            return " ".join(result)
+        else:
+            # Single edition string
+            e_str = str(edition).lower()
+            return EDITION_MAP.get(e_str, str(edition).title())
+
+    # Fallback: Check title for edition keywords
+    # Sometimes GuessIt includes edition info in the title
+    title = str(guess.get("title", "")).lower()
+    if title:
+        # Check for edition patterns in the title
+        if "extended edition" in title or "extended cut" in title:
+            return "Extended"
+        elif "unrated cut" in title or "unrated edition" in title:
+            return "Unrated"
+        elif "final cut" in title:
+            return "Final Cut"
+        elif "director's cut" in title or "directors cut" in title:
+            return "Director's Cut"
+        elif "theatrical" in title:
+            return "Theatrical"
+        elif "remastered" in title:
+            return "Remastered"
+        elif "special edition" in title:
+            return "Special Edition"
+        elif "ultimate edition" in title:
+            return "Ultimate Edition"
+        elif "criterion" in title:
+            return "Criterion"
+
+    # Check for other edition-like fields
+    if guess.get("other"):
+        other = guess.get("other")
+        if isinstance(other, list):
+            # Look for edition-related keywords
+            for item in other:
+                item_str = str(item).lower()
+                if "remastered" in item_str:
+                    return "Remastered"
+                elif "criterion" in item_str:
+                    return "Criterion"
 
     return None
