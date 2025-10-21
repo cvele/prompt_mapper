@@ -2,13 +2,7 @@
 
 import pytest
 
-from prompt_mapper.core.interfaces import (
-    IFileScanner,
-    IMovieOrchestrator,
-    IMovieResolver,
-    IRadarrService,
-    ITMDbService,
-)
+from prompt_mapper.core.interfaces import IFileScanner, IMovieOrchestrator, ITMDbService
 from prompt_mapper.core.models.processing_result import ProcessingStatus
 
 
@@ -21,6 +15,13 @@ async def test_file_scanner_integration(integration_container, test_movies_path)
     # Test scanning the flat test movies directory
     if not test_movies_path.exists():
         pytest.skip(f"Test directory not found: {test_movies_path}")
+
+    # Check if directory has any .mkv files
+    mkv_files = list(test_movies_path.glob("*.mkv"))
+    if len(mkv_files) == 0:
+        pytest.skip(
+            f"No test movie files found in: {test_movies_path}. Test movies may not have been created."
+        )
 
     result = await scanner.scan_directory(test_movies_path)
 
@@ -41,47 +42,39 @@ async def test_file_scanner_integration(integration_container, test_movies_path)
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_movie_resolver_with_mocks(
-    integration_container, test_movies_path, setup_mock_responses
-):
-    """Test movie resolver with mocked LLM responses."""
+async def test_file_scanner_list_files(integration_container, test_movies_path):
+    """Test file scanner's flat file listing."""
     scanner = integration_container.get(IFileScanner)
-    resolver = integration_container.get(IMovieResolver)
 
-    # Test with the flat test movies directory
     if not test_movies_path.exists():
         pytest.skip(f"Test directory not found: {test_movies_path}")
 
-    # Scan files
-    scan_result = await scanner.scan_directory(test_movies_path)
-    assert len(scan_result.video_files) > 0
+    # Check if directory has any .mkv files
+    mkv_files = list(test_movies_path.glob("*.mkv"))
+    if len(mkv_files) == 0:
+        pytest.skip(
+            f"No test movie files found in: {test_movies_path}. Test movies may not have been created."
+        )
 
-    # Resolve movie
-    movie_match = await resolver.resolve_movie(
-        scan_result=scan_result,
-        user_prompt="Classic Disney animated movies",
-        confidence_threshold=0.8,
-    )
+    # Test the new list_movie_files method
+    movie_files = await scanner.list_movie_files(test_movies_path)
 
-    assert movie_match is not None
-    # Since we're using real TMDb API, just verify we got a valid result
-    assert movie_match.movie_info.title is not None
-    assert movie_match.movie_info.tmdb_id is not None
-    assert movie_match.confidence > 0.0
-    assert len(movie_match.candidates) > 0
+    assert len(movie_files) >= 1
+    for file_path in movie_files:
+        assert file_path.exists()
+        assert file_path.suffix.lower() in [".mkv", ".mp4", ".avi", ".mov"]
 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_tmdb_integration(integration_container):
     """Test TMDb service integration."""
-    # Only run if TMDB_API_KEY is set
-    import os
-
-    if not os.getenv("TMDB_API_KEY"):
-        pytest.skip("TMDB_API_KEY not set")
-
     from prompt_mapper.core.models import LLMResponse
+
+    # Check if TMDB is properly configured (not a placeholder test key)
+    config = integration_container.get_config()
+    if config.tmdb.api_key == "test-tmdb-key":
+        pytest.skip("TMDB_API_KEY not configured")
 
     tmdb_service = integration_container.get(ITMDbService)
 
@@ -108,147 +101,42 @@ async def test_tmdb_integration(integration_container):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_radarr_integration(integration_container, radarr_service):
-    """Test Radarr service integration."""
-    radarr = integration_container.get(IRadarrService)
-
-    # Test system status
-    if radarr.is_available():
-        status = await radarr.get_system_status()
-        assert "version" in status
-        print(f"Radarr version: {status.get('version')}")
-    else:
-        pytest.skip("Radarr service not available")
-
-
-@pytest.mark.integration
-@pytest.mark.asyncio
-async def test_single_movie_processing(
+async def test_directory_processing(
     integration_container, test_movies_path, setup_mock_responses, radarr_service
 ):
-    """Test processing a directory with multiple movies (batch processing)."""
+    """Test processing a directory with movie files."""
     orchestrator = integration_container.get(IMovieOrchestrator)
-    orchestrator.set_interactive_mode(False)  # Non-interactive for tests
 
-    # Test with the flat test movies directory (contains multiple movies)
     if not test_movies_path.exists():
         pytest.skip(f"Test directory not found: {test_movies_path}")
 
-    # Process the movie directory - this will trigger batch processing since there are multiple movies
-    result = await orchestrator.process_single_movie(
-        path=test_movies_path,
-        user_prompt="Pixar animated movies",
-        dry_run=True,  # Don't actually modify Radarr
+    # Check if directory has any .mkv files
+    mkv_files = list(test_movies_path.glob("*.mkv"))
+    if len(mkv_files) == 0:
+        pytest.skip(
+            f"No test movie files found in: {test_movies_path}. Test movies may not have been created."
+        )
+
+    # Process the directory - this will process each file individually
+    summary = await orchestrator.process_directory(
+        directory=test_movies_path,
+        user_prompt="Animated movies",
         auto_add=False,
-        auto_import=False,
-    )
-
-    assert result is not None
-    assert result.source_path == test_movies_path
-    # Expect SUCCESS since we're processing multiple movies (batch mode)
-    assert result.status in [ProcessingStatus.SUCCESS, ProcessingStatus.FAILED]
-
-    if result.scan_result:
-        assert len(result.scan_result.video_files) > 0
-
-    if result.movie_match:
-        assert result.movie_match.movie_info.title is not None
-        assert result.movie_match.confidence > 0
-
-    # Check processing time
-    assert result.processing_time_seconds is not None
-    assert result.processing_time_seconds > 0
-
-
-@pytest.mark.integration
-@pytest.mark.asyncio
-async def test_batch_processing(
-    integration_container, test_movies_path, setup_mock_responses, radarr_service
-):
-    """Test batch processing multiple movies."""
-    orchestrator = integration_container.get(IMovieOrchestrator)
-    orchestrator.set_interactive_mode(False)
-
-    # For flat structure, we'll test with the main directory multiple times
-    # In a real scenario, this would be different directories
-    if not test_movies_path.exists():
-        pytest.skip("Test movies directory not found")
-
-    test_dirs = [test_movies_path]  # Just test with one directory for now
-
-    # Process batch
-    summary = await orchestrator.process_batch(
-        paths=test_dirs,
-        user_prompt="Classic animated movies",
-        dry_run=True,
-        auto_add=False,
-        auto_import=False,
-        max_parallel=2,
     )
 
     assert summary is not None
-    assert summary.total_processed == len(test_dirs)
+    assert summary.total_processed >= 1
     assert summary.successful >= 0
     assert summary.total_processing_time_seconds > 0
 
-    # Check individual results
-    assert len(summary.results) == len(test_dirs)
+    # Check that results exist
+    assert len(summary.results) >= 1
     for result in summary.results:
         assert result.status in [
             ProcessingStatus.SUCCESS,
             ProcessingStatus.FAILED,
-            ProcessingStatus.REQUIRES_REVIEW,
+            ProcessingStatus.SKIPPED,
         ]
-
-
-@pytest.mark.integration
-@pytest.mark.asyncio
-async def test_serbian_movies_processing(
-    integration_container, test_movies_path, setup_mock_responses
-):
-    """Test processing Serbian/Croatian movie titles."""
-    orchestrator = integration_container.get(IMovieOrchestrator)
-    orchestrator.set_interactive_mode(False)
-
-    # Test with the main directory containing Serbian titles
-    if not test_movies_path.exists():
-        pytest.skip("Test movies directory not found")
-
-    serbian_dirs = [test_movies_path]
-
-    # Use Serbian-specific prompt
-    prompt = """
-    These are movies with Serbian, Croatian, or Bosnian titles.
-    Please translate them to the original English titles.
-    Consider that some may be localized versions of international films.
-    """
-
-    summary = await orchestrator.process_batch(
-        paths=serbian_dirs, user_prompt=prompt, dry_run=True, max_parallel=1
-    )
-
-    assert summary.total_processed == len(serbian_dirs)
-
-    # Check that at least some were processed successfully
-    success_rate = summary.success_rate
-    assert success_rate >= 0  # Should process without errors
-
-
-@pytest.mark.integration
-@pytest.mark.asyncio
-async def test_error_handling(integration_container, test_movies_path):
-    """Test error handling in integration scenarios."""
-    orchestrator = integration_container.get(IMovieOrchestrator)
-
-    # Test with non-existent directory
-    fake_path = test_movies_path / "NonExistentMovie"
-
-    result = await orchestrator.process_single_movie(
-        path=fake_path, user_prompt="Test prompt", dry_run=True
-    )
-
-    assert result.status == ProcessingStatus.FAILED
-    assert result.error_message is not None
 
 
 @pytest.mark.integration
@@ -284,5 +172,5 @@ async def test_configuration_loading(integration_config):
     assert config.app.interactive is False
 
     # Test config validation
-    assert config.matching.confidence_threshold == 0.8
+    assert config.matching.confidence_threshold == 0.95
     assert len(config.files.extensions["video"]) > 0

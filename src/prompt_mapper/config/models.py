@@ -130,7 +130,7 @@ class MatchingConfig(BaseModel):
     """Movie matching configuration."""
 
     confidence_threshold: float = Field(
-        default=0.8, ge=0.0, le=1.0, description="Minimum confidence for auto-match"
+        default=0.95, ge=0.0, le=1.0, description="Minimum confidence for auto-match"
     )
     year_tolerance: int = Field(default=1, ge=0, description="Year tolerance for matching")
     max_search_results: int = Field(
@@ -196,10 +196,7 @@ class LoggingConfig(BaseModel):
 class AppConfig(BaseModel):
     """Application behavior configuration."""
 
-    dry_run: bool = Field(default=False, description="Run in dry-run mode")
     interactive: bool = Field(default=True, description="Enable interactive mode")
-    batch_size: int = Field(default=10, gt=0, description="Batch processing size")
-    parallel_workers: int = Field(default=3, gt=0, description="Number of parallel workers")
     retry_attempts: int = Field(default=3, ge=0, description="Number of retry attempts")
     cache_enabled: bool = Field(default=True, description="Enable result caching")
     cache_ttl_hours: int = Field(default=24, gt=0, description="Cache TTL in hours")

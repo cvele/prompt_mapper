@@ -3,18 +3,13 @@
 import json
 import re
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List
+from typing import List, Optional, Tuple
 
 from ...config.models import Config
 from ...infrastructure.logging import LoggerMixin
-from ...utils import (
-    LLMServiceError,
-    clean_filename,
-    extract_language_hints,
-    extract_year_from_filename,
-)
+from ...utils import LLMServiceError
 from ..interfaces import ILLMService
-from ..models import FileInfo, LLMResponse
+from ..models import MovieCandidate
 
 
 class BaseLLMService(ILLMService, LoggerMixin, ABC):
@@ -29,62 +24,66 @@ class BaseLLMService(ILLMService, LoggerMixin, ABC):
         self._config = config
         self._llm_config = config.llm
 
-    async def resolve_movie(
-        self, file_info: List[FileInfo], user_prompt: str, context: str = ""
-    ) -> LLMResponse:
-        """Resolve movie information from file information using LLM.
+    async def select_movie_from_candidates(
+        self,
+        candidates: List[MovieCandidate],
+        original_filename: str,
+        movie_name: str,
+        movie_year: Optional[int],
+        user_prompt: str,
+    ) -> Tuple[Optional[MovieCandidate], float]:
+        """Select the best movie match from TMDB candidates using LLM.
 
         Args:
-            file_info: List of file information objects.
-            user_prompt: User-provided prompt for resolution guidance.
-            context: Additional context information.
+            candidates: List of movie candidates from TMDB search.
+            original_filename: Original filename for context.
+            movie_name: Cleaned movie name extracted from filename.
+            movie_year: Extracted year from filename (if any).
+            user_prompt: User-provided prompt for selection guidance.
 
         Returns:
-            LLM response with movie resolution.
+            Tuple of (selected_candidate, confidence_score).
+            Returns (None, 0.0) if no suitable match found.
 
         Raises:
             LLMServiceError: If LLM request fails.
         """
         try:
-            # Prepare input data
-            input_data = self._prepare_input_data(file_info, context)
+            if not candidates:
+                return None, 0.0
 
-            # Create system prompt
-            system_prompt = self._create_system_prompt()
+            # Create system prompt for movie selection
+            system_prompt = self._create_selection_system_prompt()
 
-            # Create user prompt
-            full_user_prompt = self._create_user_prompt(input_data, user_prompt)
+            # Create user prompt with candidates
+            full_user_prompt = self._create_selection_user_prompt(
+                candidates, original_filename, movie_name, movie_year, user_prompt
+            )
 
             # Make LLM request
             response_text = await self._make_llm_request(system_prompt, full_user_prompt)
 
             # Parse response
-            llm_response = self._parse_response(response_text)
-
-            self.logger.info(
-                f"LLM resolved movie: {llm_response.canonical_title} ({llm_response.year})"
+            selected_index, confidence = self._parse_selection_response(
+                response_text, len(candidates)
             )
-            return llm_response
+
+            if selected_index is None:
+                self.logger.info("LLM did not select any candidate")
+                return None, 0.0
+
+            selected_candidate = candidates[selected_index]
+            self.logger.info(
+                f"LLM selected: {selected_candidate.movie_info.title} "
+                f"({selected_candidate.movie_info.year}) with confidence {confidence:.2f}"
+            )
+
+            return selected_candidate, confidence
 
         except Exception as e:
-            error_msg = f"LLM resolution failed: {e}"
+            error_msg = f"LLM selection failed: {e}"
             self.logger.error(error_msg)
             raise LLMServiceError(error_msg) from e
-
-    def validate_response(self, response: str) -> bool:
-        """Validate LLM response format.
-
-        Args:
-            response: Raw LLM response.
-
-        Returns:
-            True if response is valid, False otherwise.
-        """
-        try:
-            self._parse_response(response)
-            return True
-        except Exception:
-            return False
 
     @abstractmethod
     async def _make_llm_request(self, system_prompt: str, user_prompt: str) -> str:
@@ -99,78 +98,51 @@ class BaseLLMService(ILLMService, LoggerMixin, ABC):
         """
         pass
 
-    def _prepare_input_data(self, file_info: List[FileInfo], context: str) -> Dict[str, Any]:
-        """Prepare input data for LLM.
-
-        Args:
-            file_info: List of file information.
-            context: Additional context.
-
-        Returns:
-            Prepared input data.
-        """
-        # Get main video file (largest)
-        main_file = max(file_info, key=lambda f: f.size_bytes) if file_info else None
-
-        input_data: Dict[str, Any] = {"context": context, "files": []}
-
-        for file in file_info:
-            # Clean filename for analysis
-            clean_name = clean_filename(file.name)
-
-            file_data = {
-                "name": file.name,
-                "clean_name": clean_name,
-                "directory": file.directory_name,
-                "size_mb": round(file.size_mb, 1),
-                "is_main": file == main_file,
-                "extracted_year": extract_year_from_filename(file.name),
-                "language_hints": extract_language_hints(file.name),
-            }
-            input_data["files"].append(file_data)
-
-        return input_data
-
-    def _create_system_prompt(self) -> str:
-        """Create system prompt for LLM.
+    def _create_selection_system_prompt(self) -> str:
+        """Create system prompt for movie selection.
 
         Returns:
             System prompt text.
         """
-        return """You are a movie identification expert. Analyze the provided file information and extract canonical movie details.
+        return """You are a movie identification expert. Given a filename and a list of candidate movies from TMDb, select the best match.
 
 IMPORTANT: You must respond with valid JSON in exactly this format:
 {
-    "canonical_title": "string",
-    "year": integer_or_null,
-    "aka_titles": ["string_array"],
-    "language_hints": ["string_array"],
+    "selected_index": integer_or_null,
     "confidence": float_between_0_and_1,
-    "rationale": "string",
-    "director": "string_or_null",
-    "genre_hints": ["string_array"],
-    "edition_notes": "string_or_null"
+    "rationale": "string"
 }
 
 Rules:
-- canonical_title: The most widely recognized English title
-- year: Release year (prefer theatrical release)
-- aka_titles: Alternative titles, translated titles, or regional variations
-- language_hints: ISO language codes (en, es, fr, etc.)
-- confidence: Your confidence in the identification (0.0-1.0)
+- selected_index: The 0-based index of the best matching candidate from the list, or null if no good match
+- confidence: Your confidence in the selection (0.0-1.0). Use 0.95+ for very confident matches
 - rationale: Brief explanation of your reasoning
-- director: Director name if clearly identifiable
-- genre_hints: Likely genres based on title/context
-- edition_notes: Special edition info (Director's Cut, Extended, etc.)
 
-Focus on accuracy over speed. If uncertain, lower the confidence score."""
+Consider:
+- Title similarity (exact matches are best)
+- Year match (if year is available from filename)
+- Original title vs English title
+- Alternative titles and regional variations
+- Release date proximity
 
-    def _create_user_prompt(self, input_data: Dict[str, Any], user_prompt: str) -> str:
-        """Create user prompt with file data.
+If no candidate is a good match (wrong movie entirely), return selected_index: null with confidence 0.0."""
+
+    def _create_selection_user_prompt(
+        self,
+        candidates: List[MovieCandidate],
+        original_filename: str,
+        movie_name: str,
+        movie_year: Optional[int],
+        user_prompt: str,
+    ) -> str:
+        """Create user prompt for movie selection.
 
         Args:
-            input_data: Prepared input data.
-            user_prompt: User-provided prompt.
+            candidates: List of movie candidates.
+            original_filename: Original filename.
+            movie_name: Cleaned movie name.
+            movie_year: Extracted year.
+            user_prompt: User guidance.
 
         Returns:
             Complete user prompt.
@@ -182,49 +154,56 @@ Focus on accuracy over speed. If uncertain, lower the confidence score."""
             prompt_parts.append(f"User guidance: {user_prompt}")
             prompt_parts.append("")
 
-        # Add context if provided
-        if input_data.get("context"):
-            prompt_parts.append(f"Additional context: {input_data['context']}")
-            prompt_parts.append("")
-
         # Add file information
-        prompt_parts.append("Files to analyze:")
-        for file_data in input_data["files"]:
-            file_desc = f"- {file_data['name']}"
-            if file_data["is_main"]:
-                file_desc += " (main file)"
-            file_desc += f" [{file_data['size_mb']}MB]"
+        prompt_parts.append("File to identify:")
+        prompt_parts.append(f"  Original filename: {original_filename}")
+        prompt_parts.append(f"  Cleaned name: {movie_name}")
+        if movie_year:
+            prompt_parts.append(f"  Extracted year: {movie_year}")
+        prompt_parts.append("")
 
-            if file_data["directory"] != file_data["name"]:
-                file_desc += f" in folder: {file_data['directory']}"
-
-            if file_data["extracted_year"]:
-                file_desc += f" (extracted year: {file_data['extracted_year']})"
-
-            if file_data["language_hints"]:
-                file_desc += f" (languages: {', '.join(file_data['language_hints'])})"
-
-            prompt_parts.append(file_desc)
+        # Add candidates
+        prompt_parts.append(f"TMDb candidates ({len(candidates)} found):")
+        for i, candidate in enumerate(candidates):
+            movie = candidate.movie_info
+            prompt_parts.append(f"\nCandidate {i}:")
+            prompt_parts.append(f"  Title: {movie.title}")
+            if movie.year:
+                prompt_parts.append(f"  Year: {movie.year}")
+            if movie.original_title and movie.original_title != movie.title:
+                prompt_parts.append(f"  Original Title: {movie.original_title}")
+            prompt_parts.append(f"  TMDb ID: {movie.tmdb_id}")
+            if movie.overview:
+                overview = (
+                    movie.overview[:150] + "..." if len(movie.overview) > 150 else movie.overview
+                )
+                prompt_parts.append(f"  Overview: {overview}")
+            prompt_parts.append(f"  Match Score: {candidate.match_score:.3f}")
 
         prompt_parts.append("")
-        prompt_parts.append("Please identify this movie and respond with the required JSON format.")
+        prompt_parts.append(
+            "Please select the best matching candidate and respond with the required JSON format."
+        )
 
         return "\n".join(prompt_parts)
 
-    def _parse_response(self, response_text: str) -> LLMResponse:
-        """Parse LLM response into structured format.
+    def _parse_selection_response(
+        self, response_text: str, num_candidates: int
+    ) -> Tuple[Optional[int], float]:
+        """Parse LLM selection response.
 
         Args:
             response_text: Raw LLM response.
+            num_candidates: Number of candidates provided.
 
         Returns:
-            Parsed LLM response.
+            Tuple of (selected_index, confidence).
 
         Raises:
             LLMServiceError: If parsing fails.
         """
         try:
-            # Extract JSON from response (in case there's extra text)
+            # Extract JSON from response
             json_match = re.search(r"\{.*\}", response_text, re.DOTALL)
             if json_match:
                 json_text = json_match.group(0)
@@ -234,21 +213,28 @@ Focus on accuracy over speed. If uncertain, lower the confidence score."""
             # Parse JSON
             data = json.loads(json_text)
 
-            # Create LLMResponse with validation
-            return LLMResponse(
-                canonical_title=data["canonical_title"],
-                year=data.get("year"),
-                aka_titles=data.get("aka_titles", []),
-                language_hints=data.get("language_hints", []),
-                confidence=data["confidence"],
-                rationale=data["rationale"],
-                director=data.get("director"),
-                genre_hints=data.get("genre_hints", []),
-                edition_notes=data.get("edition_notes"),
-            )
+            selected_index = data.get("selected_index")
+            confidence = data["confidence"]
+
+            # Validate selected_index
+            if selected_index is not None:
+                if not isinstance(selected_index, int):
+                    raise LLMServiceError("selected_index must be an integer or null")
+                if not (0 <= selected_index < num_candidates):
+                    raise LLMServiceError(
+                        f"selected_index {selected_index} out of range [0, {num_candidates-1}]"
+                    )
+
+            # Validate confidence
+            if not isinstance(confidence, (int, float)):
+                raise LLMServiceError("confidence must be a number")
+            if not (0.0 <= confidence <= 1.0):
+                raise LLMServiceError("confidence must be between 0.0 and 1.0")
+
+            return selected_index, float(confidence)
 
         except (json.JSONDecodeError, KeyError, TypeError) as e:
-            raise LLMServiceError(f"Failed to parse LLM response: {e}")
+            raise LLMServiceError(f"Failed to parse LLM selection response: {e}")
 
 
 class OpenAILLMService(BaseLLMService):

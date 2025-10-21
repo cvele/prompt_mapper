@@ -3,6 +3,7 @@
 
 import locale
 import os
+import sys
 from pathlib import Path
 
 # Movie files from the screenshot - flat structure (filename, unused_size_range)
@@ -119,10 +120,10 @@ def create_dummy_file(file_path: Path, size_mb: float) -> None:
                 # Generic file marker
                 f.write(b"F")
     except PermissionError as e:
-        print(f"⚠️  Permission error creating {file_path}: {e}")
-        print("💡 This might be a CI environment issue. Continuing...")
+        print(f"WARNING: Permission error creating {file_path}: {e}")
+        print("NOTE: This might be a CI environment issue. Continuing...")
     except Exception as e:
-        print(f"❌ Error creating {file_path}: {e}")
+        print(f"ERROR: Error creating {file_path}: {e}")
         raise
 
 
@@ -135,7 +136,7 @@ def main() -> None:
         try:
             locale.setlocale(locale.LC_ALL, "en_US.UTF-8")
         except locale.Error:
-            print("⚠️  Could not set UTF-8 locale, special characters may not work properly")
+            print("WARNING: Could not set UTF-8 locale, special characters may not work properly")
 
     # Respect MOVIES_DIR environment variable, fallback to RUNNER_TEMP in CI, then test_movies
     movies_dir = os.environ.get("MOVIES_DIR")
@@ -144,7 +145,7 @@ def main() -> None:
         runner_temp = os.environ.get("RUNNER_TEMP")
         if runner_temp:
             movies_dir = os.path.join(runner_temp, "test_movies")
-            print(f"💡 Using CI temp directory: {movies_dir}")
+            print(f"NOTE: Using CI temp directory: {movies_dir}")
         else:
             movies_dir = "test_movies"
 
@@ -155,29 +156,29 @@ def main() -> None:
     try:
         # Create base directory with proper permissions
         base_path.mkdir(parents=True, exist_ok=True, mode=0o755)
-        print(f"📁 Base directory created/verified: {base_path}")
+        print(f"Base directory created/verified: {base_path}")
 
         # Test write permissions
         test_file = base_path / ".write_test"
         try:
             test_file.write_text("test")
             test_file.unlink()
-            print("✅ Write permissions verified")
+            print("Write permissions verified")
         except PermissionError:
-            print(f"❌ No write permissions in {base_path}")
+            print(f"ERROR: No write permissions in {base_path}")
             print(
-                "💡 Try setting MOVIES_DIR to a writable directory or running with proper permissions"
+                "NOTE: Try setting MOVIES_DIR to a writable directory or running with proper permissions"
             )
             return
     except PermissionError as e:
-        print(f"❌ Permission denied creating directory {base_path}: {e}")
-        print("💡 Solutions:")
+        print(f"ERROR: Permission denied creating directory {base_path}: {e}")
+        print("Solutions:")
         print("   - Set MOVIES_DIR environment variable to a writable directory")
         print("   - In CI: Use $RUNNER_TEMP (should be set automatically)")
         print("   - Run with appropriate permissions or change directory ownership")
         return
     except Exception as e:
-        print(f"❌ Unexpected error creating directory {base_path}: {e}")
+        print(f"ERROR: Unexpected error creating directory {base_path}: {e}")
         return
 
     total_files = 0
@@ -196,10 +197,17 @@ def main() -> None:
             successful_files += 1
         total_files += 1
 
-    print(f"\n✅ Created {successful_files}/{total_files} files in flat structure")
+    print(f"\nCreated {successful_files}/{total_files} files in flat structure")
     if successful_files != total_files:
-        print(f"⚠️  {total_files - successful_files} files failed (likely permission issues)")
-    print(f"📊 Total size: {successful_files} bytes (~{successful_files / 1024:.2f} KB)")
+        print(f"WARNING: {total_files - successful_files} files failed (likely permission issues)")
+    print(f"Total size: {successful_files} bytes (~{successful_files / 1024:.2f} KB)")
+
+    # Fail if no files were created at all
+    if successful_files == 0:
+        print("\nERROR: No test movie files were created!")
+        print(f"   Attempted to create files in: {base_path}")
+        print("   Please check permissions and try again.")
+        sys.exit(1)
 
     # Create a summary file
     summary_path = base_path / "README.md"
@@ -229,9 +237,9 @@ def main() -> None:
             for filename in sorted(subtitle_files):
                 f.write(f"- {filename}\n")
 
-        print(f"📄 Created summary file: {summary_path}")
+        print(f"Created summary file: {summary_path}")
     except PermissionError:
-        print("⚠️  Could not create summary file due to permissions")
+        print("WARNING: Could not create summary file due to permissions")
 
 
 if __name__ == "__main__":

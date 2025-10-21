@@ -3,13 +3,12 @@
 import asyncio
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 import click
 
 from .. import __version__
 from ..config import ConfigManager
-from ..core.models import ProcessingResult, SessionSummary
 from ..infrastructure import Container, setup_logging
 from ..utils import ConfigurationError, PromptMapperError
 
@@ -22,15 +21,13 @@ from ..utils import ConfigurationError, PromptMapperError
     help="Path to configuration file",
 )
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose logging")
-@click.option("--dry-run", is_flag=True, help="Run without making changes")
 @click.version_option(version=__version__, prog_name="prompt-mapper")
 @click.pass_context
-def cli(ctx: click.Context, config: Optional[Path], verbose: bool, dry_run: bool) -> None:
+def cli(ctx: click.Context, config: Optional[Path], verbose: bool) -> None:
     """Prompt-Based Movie Mapper - Match local movies with TMDb and Radarr."""
     # Initialize context object
     ctx.ensure_object(dict)
     ctx.obj["verbose"] = verbose
-    ctx.obj["dry_run"] = dry_run
     ctx.obj["config_path"] = config
 
     # Skip configuration loading for commands that don't need it
@@ -41,10 +38,6 @@ def cli(ctx: click.Context, config: Optional[Path], verbose: bool, dry_run: bool
         # Load configuration
         config_manager = ConfigManager(config)
         app_config = config_manager.load_config()
-
-        # Override dry-run from command line
-        if dry_run:
-            app_config.app.dry_run = True
 
         # Set up logging
         if verbose:
@@ -67,25 +60,19 @@ def cli(ctx: click.Context, config: Optional[Path], verbose: bool, dry_run: bool
 
 
 @cli.command()
-@click.argument("paths", nargs=-1, required=True, type=click.Path(exists=True, path_type=Path))
+@click.argument("directory", type=click.Path(exists=True, path_type=Path))
 @click.option("--prompt", "-p", help="Custom prompt for movie resolution")
 @click.option("--profile", help="Use named prompt profile")
-@click.option("--batch", is_flag=True, help="Process multiple directories")
 @click.option("--auto-add", is_flag=True, help="Automatically add movies to Radarr")
-@click.option("--auto-import", is_flag=True, help="Automatically import files")
-@click.option("--max-parallel", default=3, help="Maximum parallel operations")
 @click.pass_context
 def scan(
     ctx: click.Context,
-    paths: List[Path],
+    directory: Path,
     prompt: Optional[str],
     profile: Optional[str],
-    batch: bool,
     auto_add: bool,
-    auto_import: bool,
-    max_parallel: int,
 ) -> None:
-    """Scan directories for movies and process them."""
+    """Scan directory for movie files and process them individually."""
     config = ctx.obj["config"]
     container = ctx.obj["container"]
 
@@ -100,19 +87,15 @@ def scan(
     # Override config with command line options
     if auto_add:
         config.matching.auto_add_to_radarr = True
-    if auto_import:
-        config.matching.auto_import = True
 
     try:
         # Run the scan
         asyncio.run(
             _run_scan(
                 container=container,
-                paths=list(paths),
+                directory=directory,
                 user_prompt=user_prompt,
-                batch=batch,
-                dry_run=ctx.obj["dry_run"],
-                max_parallel=max_parallel,
+                auto_add=auto_add,
             )
         )
     except KeyboardInterrupt:
@@ -131,7 +114,7 @@ def validate(ctx: click.Context) -> None:
 
     try:
         asyncio.run(_validate_setup(container))
-        click.echo("✓ All prerequisites validated successfully")
+        click.echo("All prerequisites validated successfully")
     except Exception as e:
         click.echo(f"Validation failed: {e}", err=True)
         sys.exit(1)
@@ -178,9 +161,9 @@ def status(ctx: click.Context) -> None:
     # Configuration status
     click.echo(f"LLM Provider: {config.llm.provider}")
     click.echo(f"LLM Model: {config.llm.model}")
-    click.echo(f"TMDb Configured: {'✓' if config.tmdb.api_key else '✗'}")
-    click.echo(f"Radarr Enabled: {'✓' if config.radarr.enabled else '✗'}")
-    click.echo(f"Dry Run Mode: {'✓' if config.app.dry_run else '✗'}")
+    click.echo(f"TMDb Configured: {'Yes' if config.tmdb.api_key else 'No'}")
+    click.echo(f"Radarr Enabled: {'Yes' if config.radarr.enabled else 'No'}")
+    click.echo(f"Confidence Threshold: {config.matching.confidence_threshold}")
 
     # Try to validate services
     try:
@@ -191,40 +174,32 @@ def status(ctx: click.Context) -> None:
 
 async def _run_scan(
     container: Container,
-    paths: List[Path],
+    directory: Path,
     user_prompt: str,
-    batch: bool,
-    dry_run: bool,
-    max_parallel: int,
+    auto_add: bool,
 ) -> None:
     """Run the scanning process."""
     from ..core.interfaces import IMovieOrchestrator, IRadarrService, ITMDbService
 
     try:
         orchestrator = container.get(IMovieOrchestrator)  # type: ignore
-        orchestrator.set_interactive_mode(not batch)
 
         # Validate prerequisites
         errors = await orchestrator.validate_prerequisites()
         if errors:
             for error in errors:
-                click.echo(f"✗ {error}", err=True)
+                click.echo(f"ERROR: {error}", err=True)
             raise PromptMapperError("Prerequisites not met")
 
-        if len(paths) == 1 and not batch:
-            # Single movie processing
-            click.echo(f"Processing: {paths[0]}")
-            result = await orchestrator.process_single_movie(
-                path=paths[0], user_prompt=user_prompt, dry_run=dry_run
-            )
-            _display_result(result)
-        else:
-            # Batch processing
-            click.echo(f"Processing {len(paths)} directories...")
-            summary = await orchestrator.process_batch(
-                paths=paths, user_prompt=user_prompt, dry_run=dry_run, max_parallel=max_parallel
-            )
-            _display_summary(summary)
+        # Process directory
+        click.echo(f"Processing directory: {directory}")
+        click.echo("")
+
+        await orchestrator.process_directory(
+            directory=directory,
+            user_prompt=user_prompt,
+            auto_add=auto_add,
+        )
 
     finally:
         # Cleanup HTTP sessions
@@ -252,7 +227,7 @@ async def _validate_setup(container: Container) -> None:
 
     if errors:
         for error in errors:
-            click.echo(f"✗ {error}")
+            click.echo(f"ERROR: {error}")
         raise PromptMapperError("Validation failed")
 
 
@@ -264,45 +239,11 @@ async def _check_services_status(container: Container) -> None:
         radarr = container.get(IRadarrService)  # type: ignore
         if radarr.is_available():
             status = await radarr.get_system_status()
-            click.echo(f"Radarr Status: ✓ {status.get('version', 'Unknown')}")
+            click.echo(f"Radarr Status: OK {status.get('version', 'Unknown')}")
         else:
-            click.echo("Radarr Status: ✗ Unavailable")
+            click.echo("Radarr Status: Unavailable")
     except Exception:
-        click.echo("Radarr Status: ✗ Error")
-
-
-def _display_result(result: ProcessingResult) -> None:
-    """Display processing result."""
-    click.echo(f"Status: {result.status.value}")
-    if result.movie_match:
-        movie = result.movie_match.movie_info
-        click.echo(f"Movie: {movie.title} ({movie.year})")
-        click.echo(f"TMDb ID: {movie.tmdb_id}")
-        click.echo(f"Confidence: {result.movie_match.confidence:.2f}")
-
-    if result.radarr_action:
-        click.echo(f"Radarr Action: {result.radarr_action.value}")
-
-    if result.import_results:
-        imported = sum(1 for r in result.import_results if r.imported)
-        click.echo(f"Files Imported: {imported}/{len(result.import_results)}")
-
-    if result.error_message:
-        click.echo(f"Error: {result.error_message}", err=True)
-
-
-def _display_summary(summary: SessionSummary) -> None:
-    """Display session summary."""
-    click.echo("\nSession Summary")
-    click.echo("=" * 20)
-    click.echo(f"Total Processed: {summary.total_processed}")
-    click.echo(f"Successful: {summary.successful}")
-    click.echo(f"Failed: {summary.failed}")
-    click.echo(f"Skipped: {summary.skipped}")
-    click.echo(f"Success Rate: {summary.success_rate:.1%}")
-    click.echo(f"Movies Added: {summary.movies_added_to_radarr}")
-    click.echo(f"Files Imported: {summary.files_imported}")
-    click.echo(f"Total Time: {summary.total_processing_time_seconds:.1f}s")
+        click.echo("Radarr Status: Error")
 
 
 def main() -> None:

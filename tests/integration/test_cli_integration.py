@@ -61,40 +61,6 @@ def test_cli_validate_command(integration_config):
 
 
 @pytest.mark.integration
-def test_cli_scan_dry_run(integration_config, test_movies_path):
-    """Test CLI scan command in dry-run mode."""
-    # Use the flat test movies directory
-    if not test_movies_path.exists():
-        pytest.skip(f"Test directory not found: {test_movies_path}")
-
-    result = subprocess.run(
-        [
-            "python",
-            "-m",
-            "prompt_mapper.cli",
-            "--config",
-            str(integration_config),
-            "--dry-run",
-            "scan",
-            str(test_movies_path),
-            "--prompt",
-            "Animated movies collection",
-        ],
-        capture_output=True,
-        text=True,
-        cwd=Path(__file__).parent.parent.parent,
-        timeout=60,  # 60 second timeout
-    )
-
-    # Print output for debugging
-    print("STDOUT:", result.stdout)
-    print("STDERR:", result.stderr)
-
-    # Should complete without crashing
-    assert result.returncode in [0, 1]  # May fail due to missing API keys
-
-
-@pytest.mark.integration
 def test_cli_status_command(integration_config):
     """Test CLI status command."""
     result = subprocess.run(
@@ -111,19 +77,24 @@ def test_cli_status_command(integration_config):
 
 
 @pytest.mark.integration
-def test_cli_with_real_api_keys(test_movies_path):
+def test_cli_with_real_api_keys(test_movies_path, integration_config):
     """Test CLI with real API keys if available."""
-    # Only run if API keys are available
-    tmdb_key = os.getenv("TMDB_API_KEY")
-    openai_key = os.getenv("OPENAI_API_KEY")
-
-    if not (tmdb_key and openai_key):
-        pytest.skip("Real API keys not available")
-
-    # Create temporary config with real keys
+    # Load config to check if real API keys are configured
     import tempfile
 
     import yaml
+
+    with open(integration_config) as f:
+        config_data = yaml.safe_load(f)
+
+    tmdb_key = config_data.get("tmdb", {}).get("api_key")
+    openai_key = config_data.get("llm", {}).get("api_key")
+
+    # Skip if using placeholder test keys
+    if tmdb_key == "test-tmdb-key" or openai_key == "test-key-integration":
+        pytest.skip("Real API keys not configured in integration config")
+
+    # Create temporary config with real keys
 
     config_data = {
         "llm": {"provider": "openai", "model": "gpt-4o-mini", "api_key": openai_key},
@@ -154,7 +125,6 @@ def test_cli_with_real_api_keys(test_movies_path):
                 "prompt_mapper.cli",
                 "--config",
                 config_path,
-                "--dry-run",
                 "scan",
                 str(test_movies_path),
             ],
